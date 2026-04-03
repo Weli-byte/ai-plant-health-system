@@ -55,3 +55,11 @@ data/
 # Kaggle API Credentials (GİZLİ — asla push etme)
 # ═══════════════════════════════════════════════
 kaggle.json
+
+# ═══════════════════════════════════════════════
+# Ortam Değişkenleri (GİZLİ — asla push etme!)
+# ═══════════════════════════════════════════════
+.env
+.env.local
+.env.production
+backend/.env

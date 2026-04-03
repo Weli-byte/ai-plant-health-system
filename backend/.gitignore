@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Sanal Ortam
+venv/
+env/
+.venv/
+ENV/
+
+# Ortam Değişkenleri — GİZLİ BİLGİLER! Asla commit etme!
+.env
+.env.local
+.env.production
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Geçici Dosyalar
+*.log
+*.tmp
+
+# Yüklenen Görseller (Sprint 2'de eklenecek)
+uploads/
+media/
