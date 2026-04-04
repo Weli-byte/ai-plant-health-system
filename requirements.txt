@@ -1,9 +1,0 @@
-torch
-torchvision
-torchaudio
-opencv-python
-albumentations
-numpy
-pandas
-matplotlib
-tqdm
