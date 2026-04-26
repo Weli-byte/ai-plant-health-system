@@ -4,22 +4,37 @@
 # Kurulum: pip install -r requirements.txt
 # =============================================================================
 
-# Web Framework
+# ── Web Framework ─────────────────────────────────────────────────────────────
 fastapi==0.115.6          # Modern, hızlı Python web framework
-
-# ASGI Sunucusu (FastAPI'yi çalıştırmak için)
 uvicorn[standard]==0.32.1 # Production-ready ASGI sunucusu
 
-# Veritabanı
+# ── Veritabanı ────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.36         # Python ORM - veritabanı ile nesne tabanlı çalışma
 psycopg2-binary==2.9.10    # PostgreSQL için Python driver
 
-# Veri Doğrulama
+# ── Veri Doğrulama ────────────────────────────────────────────────────────────
 pydantic==2.10.3           # FastAPI'nin veri doğrulama motoru
 email-validator==2.2.0     # EmailStr tipi için gerekli (pydantic[email] bağımlılığı)
 
-# Ortam Değişkenleri
+# ── Ortam Değişkenleri ────────────────────────────────────────────────────────
 python-dotenv==1.0.1       # .env dosyasını okumak için
 
-# Dosya Yükleme (Sprint 1 - upload_image endpoint için)
+# ── Dosya Yükleme ─────────────────────────────────────────────────────────────
 python-multipart==0.0.20   # UploadFile desteği için FastAPI'nin gerektirdiği kütüphane
+
+# ── Sprint 2: AI / Derin Öğrenme ──────────────────────────────────────────────
+
+# PyTorch — EfficientNet-B3 inference ve Grad-CAM hesapları için temel framework.
+# NOT: GPU (CUDA) desteği için https://pytorch.org/get-started/locally/ adresini ziyaret et.
+#      CPU-only kurulum için aşağıdaki satır yeterli:
+torch>=2.1.0               # PyTorch ana paketi (CPU & GPU)
+torchvision>=0.16.0        # EfficientNet-B3 mimarisi + torchvision transforms
+
+# Ultralytics YOLOv8 — Yaprak tespiti modeli.
+# Hem inference hem export desteği içerir.
+ultralytics>=8.0.0         # YOLOv8 inference, training ve export
+
+# Görsel İşleme
+Pillow>=10.0.0             # PIL Image işlemleri (kırpma, yeniden boyutlandırma)
+numpy>=1.24.0              # Tensor → numpy dönüşümleri, heatmap işlemleri
+opencv-python>=4.8.0       # Grad-CAM jet colormap ve görsel bindirme (cv2)
