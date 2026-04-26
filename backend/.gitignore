@@ -28,3 +28,4 @@ ENV/
 # Yüklenen Görseller (Sprint 2'de eklenecek)
 uploads/
 media/
+data/
