@@ -242,6 +242,32 @@ Bu depo bir **öğrenci ekibi** projesidir. Dışarıdan katkı için önce ekip
 
 ---
 
+## PlantVillage Dataset Structure
+
+Bu veri setinin klasör yapısı incelenmiştir.
+Her sınıf klasörü "Bitki___Hastalık" formatındadır.
+
+Veri setinde bulunan bitki türleri:
+
+- apple
+- blueberry
+- cherry_(including_sour)
+- corn_(maize)
+- grape
+- orange
+- peach
+- pepper,_bell
+- potato
+- raspberry
+- soybean
+- squash
+- strawberry
+- tomato
+
+Toplam bitki türü: 14
+
+---
+
 ## Lisans
 
 [MIT](LICENSE)
