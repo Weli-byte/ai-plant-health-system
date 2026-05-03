@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Eye, Plus } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import RiskPredictionWidget from '../components/RiskPredictionWidget';
 
 interface Plant {
   id: number;
@@ -64,6 +65,12 @@ export default function Dashboard() {
            <h3 className="text-green-800 font-semibold mb-1">Sağlık Skoru (Ort.)</h3>
            <p className="text-4xl font-bold text-green-600">%85</p>
         </div>
+      </div>
+
+      {/* Sprint 4 AI Features */}
+      <div className="mt-8">
+        <h3 className="text-2xl font-bold text-earth-800 mb-4 px-2">Tahmin Analitiği (AI)</h3>
+        <RiskPredictionWidget />
       </div>
 
       {/* Bitki Listesi */}

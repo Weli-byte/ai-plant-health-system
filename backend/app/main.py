@@ -32,8 +32,17 @@ import app.models.disease_record  # noqa: F401
 # Route'ları içe aktar
 from app.routes import users, plants, disease_records, ai_detection
 
+# Sprint 4: Week 3 route'larını içe aktar
+from app.routes import risk_v2, multimodal, digital_twin, leaf_detection
+
 # AI Model deposunu içe aktar (lifespan içinde doldurulacak)
 from app.core.model_manager import model_store
+
+# Sprint 4: Week 3 servis singleton'larını içe aktar
+from app.services.risk_v2_service import risk_v2_store
+from app.services.multimodal_service import multimodal_store
+from app.services.digital_twin_service import digital_twin_store
+from app.ml.yolo_detector import yolo_detector
 
 # Loglama yapılandırması
 logging.basicConfig(
@@ -105,12 +114,22 @@ async def lifespan(app: FastAPI):
             "   AI endpoint'leri devre dışı. Diğer endpoint'ler çalışmaya devam eder."
         )
 
+    # Sprint 4: Week 3 modellerini yükle (her biri bağımsız, hata verirse 503 döner)
+    risk_v2_store.load()
+    multimodal_store.load()
+    digital_twin_store.load()
+    yolo_detector.load_model()
+
     # ──── UYGULAMA ÇALIŞIYOR ─────────────────────────────────────────────────
     yield  # Bu noktada uygulama istekleri karşılar
 
     # ──── SHUTDOWN ───────────────────────────────────────────────────────────
     logger.info("🔄 Uygulama kapatılıyor...")
     model_store.unload_all()
+    # Sprint 4: Week 3 modellerini bellekten temizle
+    risk_v2_store.unload()
+    multimodal_store.unload()
+    digital_twin_store.unload()
     logger.info("♻️  Bellekten modeller kaldırıldı. Güvenli kapatma tamamlandı.")
 
 
@@ -154,6 +173,12 @@ app.include_router(users.router)
 app.include_router(plants.router)
 app.include_router(disease_records.router)
 app.include_router(ai_detection.router)   # Sprint 2: Gerçek AI endpoint'leri
+
+# Sprint 4: Week 3 router'ları
+app.include_router(risk_v2.router)
+app.include_router(multimodal.router)
+app.include_router(digital_twin.router)
+app.include_router(leaf_detection.router)
 
 
 # =============================================================================

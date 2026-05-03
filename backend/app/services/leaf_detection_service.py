@@ -1,165 +1,108 @@
-# =============================================================================
-# services/leaf_detection_service.py
-#
-# Bu servis, Weli'nin eğittiği YOLOv8 modelini kullanarak bir görseldeki
-# yaprakları tespit eder (nesne tespiti / bounding box).
-#
-# Sorumluluklar:
-#   - Ham görsel baytını alıp PIL Image'a çevirmek
-#   - önceden belleğe yüklenmiş YOLO modelini kullanarak inference çalıştırmak
-#   - Bounding box koordinatlarını döndürmek
-#   - Tespit edilen yaprağı kırpıp (crop) base64 string olarak döndürmek
-# =============================================================================
+"""
+app/services/leaf_detection_service.py
+======================================
+Unified Service layer for leaf detection.
+Supports both Sprint 2 (Analysis Page) and Sprint 4 (Modular API).
+"""
 
 import io
 import base64
 import logging
-from typing import Optional
-
+import cv2
 import numpy as np
 from PIL import Image
-
-# Type hint amacıyla — gerçek YOLO nesnesi lifespan'de yüklenir
-from ultralytics import YOLO  # type: ignore
+from typing import Dict, Any, Optional, Union
+from app.ml.yolo_detector import yolo_detector
 
 logger = logging.getLogger(__name__)
 
+def _to_pil(image_source: Union[bytes, np.ndarray]) -> Image.Image:
+    """Helper to convert various image sources to PIL."""
+    if isinstance(image_source, bytes):
+        return Image.open(io.BytesIO(image_source)).convert("RGB")
+    return Image.fromarray(cv2.cvtColor(image_source, cv2.COLOR_BGR2RGB))
 
-# ---------------------------------------------------------------------------
-# Yardımcı Fonksiyonlar
-# ---------------------------------------------------------------------------
-
-def _image_to_base64(image: Image.Image, fmt: str = "JPEG") -> str:
-    """
-    PIL Image nesnesini base64 kodlu string'e dönüştürür.
-    Frontend'e görsel göndermek için kullanılır.
-
-    Args:
-        image: Gönderilecek PIL Image.
-        fmt:   Resim formatı (varsayılan: "JPEG").
-
-    Returns:
-        Base64 string (data URI olmadan, sadece ham base64).
-    """
+def _to_base64(image: Image.Image) -> str:
+    """Helper to convert PIL Image to base64 string."""
     buffer = io.BytesIO()
-    image.save(buffer, format=fmt)
-    buffer.seek(0)
+    image.save(buffer, format="JPEG")
     return base64.b64encode(buffer.read()).decode("utf-8")
 
-
-def _bytes_to_pil(image_bytes: bytes) -> Image.Image:
-    """
-    Ham bayt dizisini PIL Image'a çevirir ve RGB moduna dönüştürür.
-    PNG → JPEG dönüşümü gibi mod uyumsuzluklarını önlemek için RGB'ye normalize edilir.
-
-    Args:
-        image_bytes: HTTP isteğiyle gelen ham görsel verisi.
-
-    Returns:
-        RGB modlu PIL Image nesnesi.
-    """
-    image = Image.open(io.BytesIO(image_bytes))
-    return image.convert("RGB")
-
-
-# ---------------------------------------------------------------------------
-# Ana Servis Fonksiyonu
-# ---------------------------------------------------------------------------
-
 def detect_leaf(
-    image_bytes: bytes,
-    yolo_model: YOLO,
-    confidence_threshold: float = 0.25,
-) -> dict:
+    image_data: Optional[np.ndarray] = None,      # For Sprint 4 Route
+    image_bytes: Optional[bytes] = None,          # For Sprint 2 Route (Analyze Page)
+    yolo_model: Optional[Any] = None,             # Legacy compatibility
+    confidence_threshold: float = 0.25            # Legacy compatibility
+) -> Dict[str, Any]:
     """
-    Verilen görselde YOLOv8 modeliyle yaprak tespiti yapar.
-
-    İşlem Adımları:
-        1. Ham baytı PIL Image'a çevir.
-        2. YOLO inference çalıştır.
-        3. En yüksek güven skorlu bounding box'ı seç.
-        4. Yaprağı bounding box'a göre kırp.
-        5. Sonuçları (koordinatlar + kırpılmış görsel) döndür.
-
-    Args:
-        image_bytes:          HTTP isteğinden gelen ham görsel baytları.
-        yolo_model:           Lifespan sırasında belleğe yüklenmiş YOLO nesnesi.
-        confidence_threshold: Bu değerin altındaki tespitleri görmezden gel.
-
-    Returns:
-        Şu anahtarları içeren sözlük:
-            - leaf_detected (bool):     Yaprak bulundu mu?
-            - bounding_box (dict|None): x1, y1, x2, y2 koordinatları.
-            - confidence (float|None):  Model güven skoru (0.0 – 1.0).
-            - cropped_leaf_base64 (str|None): Kırpılmış yaprak görseli (base64).
-            - original_width (int):     Orijinal görsel genişliği.
-            - original_height (int):    Orijinal görsel yüksekliği.
-
-    Raises:
-        ValueError: Görsel çözümlenemiyorsa veya YOLO çıktısı beklenmedikse.
-        RuntimeError: YOLO model inference sırasında kritik hata oluşursa.
+    Unified leaf detection service.
+    
+    Returns a dictionary compatible with both Sprint 2 and Sprint 4 schemas.
     """
-    # --- Adım 1: Görseli hazırla ---
+    # 1. Model Check
+    if not yolo_detector.is_loaded:
+        yolo_detector.load_model()
+        if not yolo_detector.is_loaded:
+            raise FileNotFoundError("YOLO model not found in models/yolov8_leaf.pt")
+
+    # 2. Source Preparation
     try:
-        pil_image = _bytes_to_pil(image_bytes)
-        original_width, original_height = pil_image.size
-        logger.info(f"Görsel yüklendi: {original_width}x{original_height} px")
+        source = image_data if image_data is not None else image_bytes
+        if source is None:
+            raise ValueError("No image data provided.")
+        
+        # We need a numpy array for YOLO and a PIL image for cropping
+        if isinstance(source, bytes):
+            nparr = np.frombuffer(source, np.uint8)
+            cv2_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            pil_img = Image.open(io.BytesIO(source)).convert("RGB")
+        else:
+            cv2_img = source
+            pil_img = Image.fromarray(cv2.cvtColor(source, cv2.COLOR_BGR2RGB))
+            
+        h, w = cv2_img.shape[:2]
     except Exception as exc:
-        raise ValueError(f"Görsel baytları çözümlenemedi: {exc}") from exc
+        logger.error(f"Image processing error: {exc}")
+        raise ValueError(f"Invalid image format: {exc}")
 
-    # --- Adım 2: YOLO Inference ---
+    # 3. Inference
     try:
-        # verbose=False → terminale aşırı çıktı bastır
-        results = yolo_model(pil_image, conf=confidence_threshold, verbose=False)
+        raw_results = yolo_detector.detect(cv2_img)
     except Exception as exc:
-        raise RuntimeError(f"YOLO inference hatası: {exc}") from exc
+        logger.error(f"YOLO detection error: {exc}")
+        raise RuntimeError(f"Model inference failed: {exc}")
 
-    # --- Adım 3: En iyi tespiti seç ---
-    # YOLO birden fazla nesne tespit edebilir; en yüksek güvenli ilk kutuyu alırız.
-    best_box: Optional[dict] = None
-    best_conf: float = 0.0
-    cropped_leaf_b64: Optional[str] = None
+    # 4. Process Results (Sprint 2 format: Single Best Detection)
+    leaf_detected = len(raw_results["boxes"]) > 0
+    best_box = None
+    best_score = 0.0
+    cropped_b64 = None
 
-    for result in results:
-        if result.boxes is None or len(result.boxes) == 0:
-            continue  # Bu frame'de hiç tespit yok
-
-        # Her bounding box'ı gez
-        for box in result.boxes:
-            conf = float(box.conf[0])  # Güven skoru
-            if conf > best_conf:
-                best_conf = conf
-                # xyxy formatı: [x1, y1, x2, y2] piksel koordinatları
-                x1, y1, x2, y2 = [int(v) for v in box.xyxy[0].tolist()]
-                best_box = {"x1": x1, "y1": y1, "x2": x2, "y2": y2}
-
-    # --- Adım 4: Yaprağı kırp ---
-    if best_box is not None:
+    if leaf_detected:
+        # Find best confidence box
+        best_idx = np.argmax(raw_results["scores"])
+        best_box = raw_results["boxes"][best_idx] # [x1, y1, x2, y2]
+        best_score = raw_results["scores"][best_idx]
+        
+        # Crop for Sprint 2
         try:
-            cropped = pil_image.crop((
-                best_box["x1"],
-                best_box["y1"],
-                best_box["x2"],
-                best_box["y2"],
-            ))
-            cropped_leaf_b64 = _image_to_base64(cropped)
-            logger.info(
-                f"Yaprak tespit edildi. Güven: {best_conf:.2f}, "
-                f"Box: {best_box}"
-            )
+            crop = pil_img.crop((best_box[0], best_box[1], best_box[2], best_box[3]))
+            cropped_b64 = _to_base64(crop)
         except Exception as exc:
-            logger.warning(f"Yaprak kırpma hatası: {exc}")
-            # Kırpma başarısız olsa bile bounding box'ı döndürmeye devam et
-            cropped_leaf_b64 = None
-    else:
-        logger.info("Görselde yaprak tespit edilemedi.")
+            logger.warning(f"Cropping failed: {exc}")
 
-    # --- Adım 5: Sonucu döndür ---
+    # 5. Combined Response (Compatible with both Sprint 2 and Sprint 4)
     return {
-        "leaf_detected": best_box is not None,
+        # Sprint 4 fields
+        "boxes": raw_results["boxes"],
+        "scores": raw_results["scores"],
+        "classes": raw_results["classes"],
+        
+        # Sprint 2 fields (ai_detection.py)
+        "leaf_detected": leaf_detected,
         "bounding_box": best_box,
-        "confidence": round(best_conf, 4) if best_box else None,
-        "cropped_leaf_base64": cropped_leaf_b64,
-        "original_width": original_width,
-        "original_height": original_height,
+        "confidence": best_score,
+        "cropped_leaf_base64": cropped_b64,
+        "original_width": w,
+        "original_height": h
     }
