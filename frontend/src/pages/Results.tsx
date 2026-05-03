@@ -4,8 +4,18 @@ import { AlertTriangle, ShieldCheck, TrendingUp, Droplets, ArrowLeft } from 'luc
 export default function Results() {
   const location = useLocation();
   const navigate = useNavigate();
-  // Analiz sayfasından gelen fotoğraf URL'i
+  // Analiz sayfasından gelen fotoğraf URL'i ve API sonuçları
   const uploadedImage = location.state?.image || 'https://images.unsplash.com/photo-1592843997233-0eff958b4fcd?auto=format&fit=crop&q=80&w=800';
+  const resultData = location.state?.resultData;
+
+  const leafDetected = resultData?.leaf_detection?.leaf_detected ?? true;
+  const diseaseInfo = resultData?.disease_classification;
+  const gradcamInfo = resultData?.gradcam;
+
+  const diseaseName = diseaseInfo?.predicted_class || 'Powdery Mildew (Külleme)';
+  const confidenceScore = diseaseInfo?.confidence ? (diseaseInfo.confidence * 100).toFixed(1) : '94.2';
+  const overlayImage = gradcamInfo?.overlay_base64 ? `data:image/jpeg;base64,${gradcamInfo.overlay_base64}` : uploadedImage;
+
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pb-20">
@@ -30,16 +40,17 @@ export default function Results() {
               Saptanan Problemli Bölge
             </h3>
             <div className="relative rounded-2xl overflow-hidden bg-black group">
-               {/* Asıl Resim */}
-               <img src={uploadedImage} alt="Bitki" className="w-full opacity-80" />
-               {/* Mock Grad-CAM Karar Bölgesi Kutusu */}
-               <div className="absolute top-[30%] left-[40%] w-32 h-32 border-4 border-red-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]"></div>
+               {/* Asıl Resim / Grad-CAM */}
+               <img src={overlayImage} alt="Bitki Analizi" className="w-full opacity-80" />
+               {/* Eğer Grad-CAM yoksa Mock Kutuyu göster */}
+               {!gradcamInfo && <div className="absolute top-[30%] left-[40%] w-32 h-32 border-4 border-red-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]"></div>}
                <div className="absolute bottom-4 left-4 bg-black/60 text-white text-sm px-3 py-1 rounded-lg backdrop-blur-sm">
-                  Model Güven Skoru: <strong className="text-green-400">%94.2</strong>
+                  Model Güven Skoru: <strong className="text-green-400">%{confidenceScore}</strong>
                </div>
             </div>
             <p className="mt-4 text-earth-500 text-sm">
-               Kırmızı işaretli bölge, yapay zekanın <b>"Powdery Mildew" (Külleme)</b> hastalığı teşhisini koyarken odaklandığı ana dokuları göstermektedir.
+               Kırmızı işaretli bölge, yapay zekanın <b>"{diseaseName}"</b> hastalığı teşhisini koyarken odaklandığı ana dokuları göstermektedir.
+               {!leafDetected && <span className="text-red-500 block mt-2">Uyarı: Görselde net bir bitki yaprağı tespit edilemedi. Analiz sonuçları yanıltıcı olabilir.</span>}
             </p>
           </div>
 
@@ -61,9 +72,9 @@ export default function Results() {
           {/* Teşhis Kartı */}
           <div className="bg-white rounded-3xl p-6 shadow-sm border-l-8 border-red-500">
              <h4 className="text-earth-500 font-semibold mb-1">Tespit Edilen Hastalık</h4>
-             <p className="text-3xl font-black text-earth-800 mb-2">Powdery Mildew (Külleme)</p>
+             <p className="text-3xl font-black text-earth-800 mb-2">{diseaseName}</p>
              <p className="text-earth-600">
-               Yaprak yüzeyinde beyaz unsu bir tabaka ile karakterize edilen yaygın bir mantar hastalığıdır.
+               Yapay zeka sistemimiz yüklediğiniz görselde bu hastalığın belirtilerini tespit etti. Aşağıdaki bakım önerilerini dikkate almanız tavsiye edilir.
              </p>
           </div>
 

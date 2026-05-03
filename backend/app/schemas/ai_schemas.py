@@ -224,6 +224,21 @@ class FullAnalysisResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Endpoint: /ai/chat (Zirai Asistan)
+# ---------------------------------------------------------------------------
+
+class ChatRequest(BaseModel):
+    """Chat asistanı için kullanıcı mesajını içeren şema."""
+    message: str = Field(..., description="Kullanıcının sorduğu zirai soru.")
+
+class ChatResponse(BaseModel):
+    """Chat asistanından dönen yanıt şeması."""
+    success: bool = True
+    response: str = Field(..., description="Yapay zeka asistanının cevabı.")
+    message: str = "Asistan yanıtı hazır."
+
+
+# ---------------------------------------------------------------------------
 # Hata Yanıtı
 # ---------------------------------------------------------------------------
 

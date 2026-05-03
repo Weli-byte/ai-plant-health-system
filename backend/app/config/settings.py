@@ -33,10 +33,15 @@ class Settings:
     DB_USER: str = os.getenv("DB_USER", "postgres")
     DB_PASSWORD: str = os.getenv("DB_PASSWORD", "password")
 
+    # SQLite Fallback (Geliştirme kolaylığı için)
+    USE_SQLITE: bool = os.getenv("USE_SQLITE", "True").lower() == "true"
+
     # SQLAlchemy bağlantı URL'si
-    # Format: postgresql://kullanici:sifre@host:port/veritabanı
     @property
     def DATABASE_URL(self) -> str:
+        if self.USE_SQLITE:
+            return "sqlite:///./plant_health.db"
+        
         return (
             f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}"
             f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"

@@ -38,3 +38,10 @@ ultralytics>=8.0.0         # YOLOv8 inference, training ve export
 Pillow>=10.0.0             # PIL Image işlemleri (kırpma, yeniden boyutlandırma)
 numpy>=1.24.0              # Tensor → numpy dönüşümleri, heatmap işlemleri
 opencv-python>=4.8.0       # Grad-CAM jet colormap ve görsel bindirme (cv2)
+
+# ── Sprint 3: Tabular ML / Risk Prediction ───────────────────────────────────
+xgboost>=2.0.0             # XGBoost Regressor — disease risk model
+scikit-learn>=1.4.0        # Pipeline, ColumnTransformer, preprocessing, metrics
+pandas>=2.1.0              # DataFrame construction for sklearn Pipeline
+joblib>=1.3.0              # Model serialization (replaces raw pickle for large numpy arrays)
+

@@ -14,20 +14,37 @@ export default function ChatbotWidget() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!input.trim()) return;
     
+    const userInput = input;
     // Kullanıcı mesajı ekle
-    setMessages(prev => [...prev, { sender: 'user', text: input }]);
+    setMessages(prev => [...prev, { sender: 'user', text: userInput }]);
     setInput('');
 
-    // Mock Bot Yanıtı (Normalde Backend /ai/chat vs endpointine gider)
-    setTimeout(() => {
+    try {
+      // Backend AI API'sine bağlan
+      const response = await fetch('http://localhost:8000/ai/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userInput }),
+      });
+
+      if (!response.ok) throw new Error('API hatası');
+
+      const data = await response.json();
+      
       setMessages(prev => [...prev, { 
         sender: 'bot', 
-        text: 'Anlıyorum. Külleme hastalığı için sistemin önerdiği kükürt dozunu güneş tam tepedeyken UYGULAMAYINIZ, yaprakları yakabilir. Akşam üstünü tercih etmelisiniz.' 
+        text: data.response
       }]);
-    }, 1500);
+    } catch (error) {
+      console.error('Chat hatası:', error);
+      setMessages(prev => [...prev, { 
+        sender: 'bot', 
+        text: 'Üzgünüm, şu an yanıt veremiyorum. Lütfen internet bağlantınızı ve sunucuyu kontrol edin.'
+      }]);
+    }
   };
 
   return (

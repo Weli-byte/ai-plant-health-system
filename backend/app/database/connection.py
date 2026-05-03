@@ -9,14 +9,16 @@ from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 from app.config.settings import settings
 
-# -----------------------------------------------------------------------------
-# Engine: Veritabanına gerçek bağlantıyı sağlayan nesne.
-# "pool_pre_ping=True" → bağlantı koptuğunda otomatik yeniden bağlanır.
-# -----------------------------------------------------------------------------
+# engine nesnesini oluştur
+connect_args = {}
+if settings.DATABASE_URL.startswith("sqlite"):
+    connect_args = {"check_same_thread": False}
+
 engine = create_engine(
     settings.DATABASE_URL,
     pool_pre_ping=True,   # Bağlantı sağlığını kontrol et
     echo=settings.DEBUG,  # DEBUG modunda SQL sorgularını konsola yaz
+    connect_args=connect_args
 )
 
 # -----------------------------------------------------------------------------

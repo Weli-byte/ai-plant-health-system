@@ -4,6 +4,7 @@ import { UploadCloud, Image as ImageIcon, Loader2 } from 'lucide-react';
 
 export default function Analyze() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const navigate = useNavigate();
 
@@ -11,21 +12,39 @@ export default function Analyze() {
     const file = e.target.files?.[0];
     if (file) {
       // Mock: resmi okuyup URL oluştur
+      setSelectedFile(file);
       const imageUrl = URL.createObjectURL(file);
       setSelectedImage(imageUrl);
     }
   };
 
-  const handleAnalyze = () => {
-    if (!selectedImage) return;
+  const handleAnalyze = async () => {
+    if (!selectedImage || !selectedFile) return;
     setIsAnalyzing(true);
 
-    // Mock API bekleme süresi (3 saniye)
-    setTimeout(() => {
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const response = await fetch('http://localhost:8000/ai/analyze', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error('Yapay zeka analizi sırasında sunucu hatası oluştu.');
+      }
+
+      const resultData = await response.json();
+      
       setIsAnalyzing(false);
-      // Sonuç sayfasına geçiş, resmi state üzerinden taşıyoruz
-      navigate('/results', { state: { image: selectedImage } });
-    }, 3000);
+      // Sonuç sayfasına geçiş, resmi ve API sonuçlarını state üzerinden taşıyoruz
+      navigate('/results', { state: { image: selectedImage, resultData } });
+    } catch (error) {
+      console.error('Analiz Hatası:', error);
+      alert('Analiz yapılamadı. Lütfen sunucunun çalıştığından emin olun.');
+      setIsAnalyzing(false);
+    }
   };
 
   return (

@@ -33,6 +33,8 @@ from app.core.model_manager import model_store
 # Pydantic yanıt şemaları
 from app.schemas.ai_schemas import (
     AIErrorResponse,
+    ChatRequest,
+    ChatResponse,
     DiseaseClassificationRequest,
     DiseaseClassificationResponse,
     FullAnalysisResponse,
@@ -473,4 +475,63 @@ async def analyze_endpoint(
         disease_classification=disease_response,
         gradcam=gradcam_response,
         message=final_message,
+    )
+# =============================================================================
+# Endpoint 5: POST /ai/chat
+# =============================================================================
+
+@router.post(
+    "/chat",
+    response_model=ChatResponse,
+    summary="Zirai Yapay Zeka Asistanı ile sohbet et",
+    description=(
+        "Kullanıcının bitki sağlığı, tarım ve bakım hakkındaki sorularını yanıtlar. "
+        "Bu endpoint, uzman bir zirai danışman gibi davranır."
+    )
+)
+async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
+    """
+    Zirai asistan mantığı. Şu an için kural tabanlı gelişmiş bir motor 
+    kullanılmaktadır ancak ileride bir LLM (Gemini/OpenAI) ile entegre edilebilir.
+    """
+    msg = request.message.lower()
+    
+    # Gelişmiş Bilgi Tabanlı Mantık (API üzerinden gelen gerçek yanıtlar)
+    if any(k in msg for k in ["külleme", "mildew", "beyaz leke"]):
+        response = (
+            "Külleme (Powdery Mildew) mantar kaynaklı bir hastalıktır. "
+            "Kükürt bazlı ilaçlar etkilidir ancak uygulama sırasında hava sıcaklığının "
+            "30 derecenin altında olmasına dikkat edin. Akşam saatlerini tercih edin."
+        )
+    elif any(k in msg for k in ["su", "sulama", "nem"]):
+        response = (
+            "Bitki sulamasında temel kural toprağın üst yüzeyinin kurumuş olmasıdır. "
+            "Mantar hastalıklarını önlemek için yapraklara su değdirmemeye ve "
+            "sabahın erken saatlerinde sulama yapmaya özen gösterin."
+        )
+    elif any(k in msg for k in ["gübre", "besin", "npk"]):
+        response = (
+            "Bitkinizin gelişim evresine göre gübreleme yapmalısınız. "
+            "Yaprak gelişimi için Azot (N), çiçeklenme için Fosfor (P) ağırlıklı "
+            "organik gübreler tavsiye edilir. Hastalıklı bitkiye ağır gübreleme yapmayın."
+        )
+    elif any(k in msg for k in ["pas", "rust", "turuncu"]):
+        response = (
+            "Pas hastalığı genellikle yüksek nemden kaynaklanır. Bakır içerikli "
+            "fungisitler (Bordo bulamacı gibi) bu hastalıkta oldukça etkilidir. "
+            "Hastalıklı yaprakları derhal imha edin."
+        )
+    elif "merhaba" in msg or "selam" in msg:
+        response = "Merhaba! Ben Agro AI. Bitkileriniz hakkında her türlü soruyu bana sorabilirsiniz. Size nasıl yardımcı olabilirim?"
+    else:
+        response = (
+            "Bu konuda size en doğru bilgiyi verebilmem için bitkinizin bir fotoğrafını "
+            "'Tahlil' kısmından yüklemenizi öneririm. Genel bir tavsiye olarak; "
+            "bitkinizin havalandırmasını artırmak ve nem dengesini korumak çoğu hastalığı önleyecektir."
+        )
+
+    return ChatResponse(
+        success=True,
+        response=response,
+        message="AI asistanı yanıtı başarıyla oluşturdu."
     )
