@@ -32,6 +32,9 @@ import app.models.disease_record  # noqa: F401
 # Route'ları içe aktar
 from app.routes import users, plants, disease_records, ai_detection
 
+# Sprint 3: Tarım Karar Destek Sistemi route'larını içe aktar
+from app.routes import ai_sprint3
+
 # Sprint 4: Week 3 route'larını içe aktar
 from app.routes import risk_v2, multimodal, digital_twin, leaf_detection
 
@@ -173,6 +176,7 @@ app.include_router(users.router)
 app.include_router(plants.router)
 app.include_router(disease_records.router)
 app.include_router(ai_detection.router)   # Sprint 2: Gerçek AI endpoint'leri
+app.include_router(ai_sprint3.router)      # Sprint 3: Karar Destek Sistemi
 
 # Sprint 4: Week 3 router'ları
 app.include_router(risk_v2.router)

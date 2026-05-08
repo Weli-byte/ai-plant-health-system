@@ -83,6 +83,16 @@ class ModelStore:
         )
         self.is_loaded: bool = False
 
+        # ------------------------------------------------------------------
+        # Sprint 3 Model Referansları
+        # Bu attribute'lar Sprint 3 servisleri tarafından kendi singleton
+        # store'ları üzerinden yönetilir. Burada merkezi izleme için tutulur.
+        # ------------------------------------------------------------------
+        self.xgboost_predictor: Optional[object] = None   # RiskPredictor singleton
+        self.lstm_twin_store:   Optional[object] = None   # DigitalTwinModelStore
+        self.multimodal_store:  Optional[object] = None   # MultimodalModelStore
+        self.sprint3_loaded: bool = False
+
     # ------------------------------------------------------------------
     # YOLOv8 Yükleme
     # ------------------------------------------------------------------
@@ -287,17 +297,74 @@ class ModelStore:
         self._load_efficientnet(efficientnet_path)
 
         self.is_loaded = True
-        logger.info("✅ Tüm modeller başarıyla yüklendi. API hazır.")
+        logger.info("✅ Sprint 2 modelleri başarıyla yüklendi (YOLO + EfficientNet).")
+
+        # Sprint 3 model referanslarını bağla (bağımsız try-except bloklar ile)
+        self._load_sprint3_models()
+
+    def _load_sprint3_models(self) -> None:
+        """
+        Sprint 3 modellerini yükler veya referanslarını alır.
+
+        XGBoost lazy-load ile çalışır: ilk predict() çağrısında diskten yüklenir.
+        LSTM ve Multimodal kendi store singleton'ları üzerinden lifespan'de yüklenir;
+        bu metod yalnızca referansları alır, ikinci kez yükleme yapmaz.
+
+        Her sub-blok bağımsız try-except ile korunur:
+        Biri başarısız olsa diğerleri ve Sprint 2 modelleri etkilenmez.
+        """
+        logger.info("📦 Sprint 3 model referansları bağlanıyor...")
+
+        # XGBoost RiskPredictor — lazy-load; yalnızca singleton alınır
+        try:
+            from app.services.risk_prediction_service import get_risk_predictor
+            self.xgboost_predictor = get_risk_predictor()
+            logger.info("✅ Sprint 3 XGBoost: RiskPredictor singleton alındı (lazy-load).")
+        except Exception as exc:
+            logger.warning("⚠️  Sprint 3 XGBoost referansı alınamadı: %s", exc)
+
+        # LSTM Digital Twin store referansı
+        try:
+            from app.services.digital_twin_service import digital_twin_store
+            self.lstm_twin_store = digital_twin_store
+            logger.info(
+                "✅ Sprint 3 LSTM: DigitalTwinModelStore referansı alındı (yükleme=%s).",
+                digital_twin_store.is_loaded,
+            )
+        except Exception as exc:
+            logger.warning("⚠️  Sprint 3 LSTM referansı alınamadı: %s", exc)
+
+        # Multimodal Transformer store referansı
+        try:
+            from app.services.multimodal_service import multimodal_store
+            self.multimodal_store = multimodal_store
+            logger.info(
+                "✅ Sprint 3 Multimodal: MultimodalModelStore referansı alındı (yükleme=%s).",
+                multimodal_store.is_loaded,
+            )
+        except Exception as exc:
+            logger.warning("⚠️  Sprint 3 Multimodal referansı alınamadı: %s", exc)
+
+        self.sprint3_loaded = True
+        logger.info("✅ Sprint 3 model referansları bağlandı.")
 
     def unload_all(self) -> None:
         """
         Tüm modelleri bellekten temizler.
         FastAPI shutdown event'inde çağrılır.
+        Sprint 2 (YOLO, EfficientNet) ve Sprint 3 referansları sıfırlanır.
         """
+        # Sprint 2 modelleri
         self.yolo = None
         self.efficientnet = None
         self.gradcam_target_layer = None
         self.is_loaded = False
+
+        # Sprint 3 referanslarını sıfırla (asil temizlik kendi store'larında yapılır)
+        self.xgboost_predictor = None
+        self.lstm_twin_store   = None
+        self.multimodal_store  = None
+        self.sprint3_loaded    = False
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()

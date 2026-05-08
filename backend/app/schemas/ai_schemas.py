@@ -254,3 +254,419 @@ class AIErrorResponse(BaseModel):
         "Bir hata oluştu. Lütfen tekrar deneyin.",
         description="Kullanıcıya gösterilecek mesaj."
     )
+
+
+# =============================================================================
+# Sprint 3 — Yeni Şemalar
+# Aşağıdaki şemalar; risk tahmini, dijital ikiz simülasyonu ve tarım
+# öneri endpoint'leri için kullanılır. Üsteki eski şemalara dokunulmamıştır.
+# =============================================================================
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: /sprint3/predict_risk
+# XGBoost + Multimodal Transformer — Hastalık Risk Skoru (0-100)
+# ---------------------------------------------------------------------------
+
+class ClimateDataRequest(BaseModel):
+    """
+    /sprint3/predict_risk endpoint'inin istek gövdesi.
+
+    İklim ve çevre verilerini alarak 0-100 arasında bir hastalık risk skoru
+    döndürür. Hem XGBoost tabanlı tahmin hem de kural tabanlı düzeltmeler
+    bu şema üzerinden beslenir.
+    """
+    temperature: float = Field(
+        ...,
+        ge=-10.0,
+        le=50.0,
+        description="Hava sıcaklığı (°C). Aralık: -10 ile 50.",
+        examples=[24.5],
+    )
+    humidity: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="Bağıl nem oranı (%). Aralık: 0 ile 100.",
+        examples=[78.0],
+    )
+    rainfall: float = Field(
+        ...,
+        ge=0.0,
+        le=400.0,
+        description="Yağış miktarı (mm). Aralık: 0 ile 400.",
+        examples=[55.0],
+    )
+    wind_speed: float = Field(
+        ...,
+        ge=0.0,
+        le=120.0,
+        description="Rüzgar hızı (km/s). Aralık: 0 ile 120.",
+        examples=[12.0],
+    )
+    soil_moisture: Optional[float] = Field(
+        None,
+        ge=0.0,
+        le=100.0,
+        description="Toprak nemi (%). İsteğe bağlı; verilirse risk hesabına dahil edilir.",
+        examples=[45.0],
+    )
+    season: str = Field(
+        ...,
+        description="Mevsim: 'spring', 'summer', 'autumn', 'winter'.",
+        examples=["spring"],
+    )
+    plant_health_status: Optional[str] = Field(
+        None,
+        description="Bitkinin mevcut sağlık durumu: 'healthy', 'stressed', 'diseased'. "
+                    "İsteğe bağlıdır; verilirse öneri motoru tarafından kullanılır.",
+        examples=["healthy"],
+    )
+    disease_name: Optional[str] = Field(
+        None,
+        description="Tespit edilmiş hastalık adı (örn. 'Powdery Mildew'). "
+                    "İsteğe bağlıdır; ilaç önerisi için kullanılır.",
+        examples=["Powdery Mildew"],
+    )
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "temperature": 24.5,
+            "humidity": 78.0,
+            "rainfall": 55.0,
+            "wind_speed": 12.0,
+            "soil_moisture": 45.0,
+            "season": "spring",
+            "plant_health_status": "healthy",
+            "disease_name": None,
+        }
+    }}
+
+
+class RiskScoreResponse(BaseModel):
+    """
+    /sprint3/predict_risk endpoint'inin yanıt şeması.
+
+    XGBoost modeli çıktısını alır, 0-100 arasında normalize eder ve
+    çiftçiye yönelik risk seviyesi + açıklamasını döndürür.
+    """
+    success: bool = Field(..., description="İşlem başarılı mı?")
+    risk_score: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="Hesaplanan hastalık risk skoru (0=Risksiz, 100=Kritik).",
+    )
+    risk_level: str = Field(
+        ...,
+        description="Risk seviyesi: 'Low', 'Medium', 'High', 'Critical'.",
+    )
+    risk_label: str = Field(
+        ...,
+        description="Risk seviyesinin okunabilir etiketi (örn. 'High Risk').",
+    )
+    risk_color: str = Field(
+        ...,
+        description="UI'da kullanılmak üzere renk kodu (hex). "
+                    "Örn: '#22c55e' (yeşil), '#ef4444' (kırmızı).",
+    )
+    action: str = Field(
+        ...,
+        description="Çiftçi için önerilen acil eylem açıklaması.",
+    )
+    recommendations: list[str] = Field(
+        ...,
+        description="İklim koşullarına göre üretilen önerilerin listesi.",
+    )
+    model_used: str = Field(
+        ...,
+        description="Tahminde kullanılan model: 'xgboost', 'rule_based' vb.",
+    )
+    message: str = Field(..., description="İnsan okunabilir durum mesajı.")
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "success": True,
+            "risk_score": 67.4,
+            "risk_level": "High",
+            "risk_label": "High Risk",
+            "risk_color": "#f97316",
+            "action": "Inspect plants daily. Consider preventive fungicide application.",
+            "recommendations": [
+                "🌫️ High humidity (78%). Improve air circulation.",
+                "🌸 Spring: begin sulfur-based preventive treatment.",
+            ],
+            "model_used": "xgboost",
+            "message": "Risk skoru başarıyla hesaplandı.",
+        }
+    }}
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: /sprint3/get_plant_future
+# LSTM Digital Twin — 3 ve 7 Günlük Risk Tahmini
+# ---------------------------------------------------------------------------
+
+class PlantFutureRequest(BaseModel):
+    """
+    /sprint3/get_plant_future endpoint'inin istek gövdesi.
+
+    LSTM tabanlı dijital ikiz modeline beslenen zaman serisi penceresi.
+    Her gün için 7 özellik girilmesi gerekmektedir.
+    """
+    observations: list[list[float]] = Field(
+        ...,
+        min_length=3,
+        description=(
+            "Geçmiş günlük gözlem penceresi. Her iç liste 7 değer içermelidir: "
+            "[risk_score, temperature, humidity, rainfall, wind_speed, soil_moisture, plant_health]. "
+            "En az 3 gün, önerilen 7 gün."
+        ),
+        examples=[[[0.3, 22.0, 70.0, 30.0, 10.0, 50.0, 0.8]]],
+    )
+    location_label: Optional[str] = Field(
+        None,
+        description="İsteğe bağlı: Tarla veya konum etiketi (yanıtta iade edilir).",
+        examples=["Tarla-A / İzmir"],
+    )
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "observations": [
+                [0.2, 20.0, 65.0, 25.0, 8.0, 48.0, 0.9],
+                [0.3, 22.0, 72.0, 40.0, 12.0, 52.0, 0.85],
+                [0.4, 24.0, 78.0, 55.0, 15.0, 58.0, 0.75],
+                [0.5, 25.0, 80.0, 60.0, 18.0, 60.0, 0.70],
+                [0.6, 26.0, 82.0, 65.0, 20.0, 62.0, 0.65],
+                [0.65, 24.5, 79.0, 58.0, 14.0, 57.0, 0.68],
+                [0.7, 23.0, 76.0, 50.0, 11.0, 54.0, 0.72],
+            ],
+            "location_label": "Tarla-A / İzmir",
+        }
+    }}
+
+
+class DayForecast(BaseModel):
+    """Tek bir günün tahmin sonucu."""
+    day: int = Field(..., description="Tahmin ufku (gün sayısı, örn. 3 veya 7).")
+    risk_score: float = Field(
+        ...,
+        ge=0.0,
+        le=1.0,
+        description="Tahmin edilen risk skoru (0-1 aralığı, normalize).",
+    )
+    risk_score_pct: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="Yüzdelik risk skoru (0-100 aralığı).",
+    )
+    risk_level: str = Field(
+        ...,
+        description="Risk seviyesi etiketi: 'Low', 'Medium', 'High', 'Critical'.",
+    )
+
+
+class PlantFutureResponse(BaseModel):
+    """
+    /sprint3/get_plant_future endpoint'inin yanıt şeması.
+
+    LSTM digital twin modelinden gelen 3 ve 7 günlük risk tahminlerini
+    yapılandırılmış biçimde sunar.
+    """
+    success: bool = Field(..., description="İşlem başarılı mı?")
+    location_label: Optional[str] = Field(
+        None,
+        description="İstek ile birlikte gönderilen konum etiketi.",
+    )
+    forecast_3_day: DayForecast = Field(
+        ...,
+        description="3 gün sonrası için risk tahmini.",
+    )
+    forecast_7_day: DayForecast = Field(
+        ...,
+        description="7 gün sonrası için risk tahmini.",
+    )
+    trend: str = Field(
+        ...,
+        description="Risk trendi: 'increasing', 'stable', 'decreasing'.",
+    )
+    model_version: str = Field(
+        ...,
+        description="Kullanılan LSTM model sürümü.",
+    )
+    message: str = Field(..., description="İnsan okunabilir durum mesajı.")
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "success": True,
+            "location_label": "Tarla-A / İzmir",
+            "forecast_3_day": {
+                "day": 3,
+                "risk_score": 0.72,
+                "risk_score_pct": 72.0,
+                "risk_level": "High",
+            },
+            "forecast_7_day": {
+                "day": 7,
+                "risk_score": 0.85,
+                "risk_score_pct": 85.0,
+                "risk_level": "Critical",
+            },
+            "trend": "increasing",
+            "model_version": "1.0.0",
+            "message": "Dijital ikiz simülasyonu tamamlandı.",
+        }
+    }}
+
+
+# ---------------------------------------------------------------------------
+# Endpoint: /sprint3/get_farming_advice
+# Kural Tabanlı Tarım Danışma Sistemi + Zirai İlaç Önerisi
+# ---------------------------------------------------------------------------
+
+class FarmingAdviceRequest(BaseModel):
+    """
+    /sprint3/get_farming_advice endpoint'inin istek gövdesi.
+
+    İklim koşulları ve bitki sağlık durumu girildiğinde kural motoru devreye
+    girerek hem tarım tavsiyesi hem de ilaç önerisi üretir.
+    """
+    temperature: float = Field(
+        ...,
+        ge=-10.0,
+        le=50.0,
+        description="Hava sıcaklığı (°C).",
+        examples=[26.0],
+    )
+    humidity: float = Field(
+        ...,
+        ge=0.0,
+        le=100.0,
+        description="Bağıl nem oranı (%).",
+        examples=[83.0],
+    )
+    rainfall: float = Field(
+        ...,
+        ge=0.0,
+        le=400.0,
+        description="Yağış miktarı (mm).",
+        examples=[60.0],
+    )
+    wind_speed: float = Field(
+        ...,
+        ge=0.0,
+        le=120.0,
+        description="Rüzgar hızı (km/s).",
+        examples=[15.0],
+    )
+    season: str = Field(
+        ...,
+        description="Mevsim: 'spring', 'summer', 'autumn', 'winter'.",
+        examples=["spring"],
+    )
+    plant_health_status: str = Field(
+        ...,
+        description="Bitkinin mevcut sağlık durumu: 'healthy', 'stressed', 'diseased'.",
+        examples=["stressed"],
+    )
+    disease_name: Optional[str] = Field(
+        None,
+        description="Tespit edilmiş hastalık adı (örn. 'Powdery Mildew', 'Apple Scab'). "
+                    "Belirtilirse ilaç veritabanından eşleşen ürün önerilir.",
+        examples=["Powdery Mildew"],
+    )
+    crop_type: Optional[str] = Field(
+        None,
+        description="Bitki/ürün türü (örn. 'wheat', 'tomato', 'apple'). "
+                    "Belirtilirse öneri içeriği zenginleştirilir.",
+        examples=["apple"],
+    )
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "temperature": 26.0,
+            "humidity": 83.0,
+            "rainfall": 60.0,
+            "wind_speed": 15.0,
+            "season": "spring",
+            "plant_health_status": "stressed",
+            "disease_name": "Powdery Mildew",
+            "crop_type": "apple",
+        }
+    }}
+
+
+class PesticideRecommendation(BaseModel):
+    """Tek bir zirai ilaç önerisi."""
+    disease: str = Field(..., description="Eşleşen hastalık adı.")
+    product_type: str = Field(
+        ...,
+        description="İlaç tipi (örn. 'fungicide', 'bactericide', 'insecticide').",
+    )
+    active_ingredient: str = Field(
+        ...,
+        description="Aktif madde adı (örn. 'sulfur', 'copper hydroxide').",
+    )
+    product_name: str = Field(
+        ...,
+        description="Ticari ürün adı veya jenerik ismi.",
+    )
+    application_notes: str = Field(
+        ...,
+        description="Uygulama notları (doz, zamanlama, güvenlik bilgisi).",
+    )
+
+
+class FarmingAdviceResponse(BaseModel):
+    """
+    /sprint3/get_farming_advice endpoint'inin yanıt şeması.
+
+    Kural motorundan gelen tarım önerileri ve ilaç veritabanından
+    eşleşen ürün bilgilerini birleştirerek çiftçiye kapsamlı tavsiye sunar.
+    """
+    success: bool = Field(..., description="İşlem başarılı mı?")
+    risk_level: str = Field(
+        ...,
+        description="Hesaplanan risk seviyesi: 'Low', 'Medium', 'High', 'Critical'.",
+    )
+    farming_advice: list[str] = Field(
+        ...,
+        description="Kural motorundan üretilen tarım önerilerinin listesi.",
+    )
+    pesticide_recommendations: list[PesticideRecommendation] = Field(
+        ...,
+        description="Hastalık ve koşullara göre önerilen zirai ilaçlar.",
+    )
+    irrigation_advice: str = Field(
+        ...,
+        description="Sulama önerisi.",
+    )
+    general_notes: str = Field(
+        ...,
+        description="Genel gözlem notu veya uyarı.",
+    )
+    message: str = Field(..., description="İnsan okunabilir durum mesajı.")
+
+    model_config = {"json_schema_extra": {
+        "example": {
+            "success": True,
+            "risk_level": "High",
+            "farming_advice": [
+                "🌫️ Nem %83 — bitkilerin arasındaki hava sirkülasyonunu artırın.",
+                "⚠️ Powdery Mildew risk altında. Kükürt bazlı fungisit uygulayın.",
+            ],
+            "pesticide_recommendations": [
+                {
+                    "disease": "Powdery Mildew",
+                    "product_type": "fungicide",
+                    "active_ingredient": "sulfur",
+                    "product_name": "Thiovit Jet",
+                    "application_notes": "7-10 günde bir, sabah erken saatlerde uygulayın.",
+                }
+            ],
+            "irrigation_advice": "Sabah erken sulayın; akşam sulamaktan kaçının.",
+            "general_notes": "Yüksek nem ve sıcaklık Powdery Mildew gelişimi için elverişli.",
+            "message": "Tarım danışma raporu hazırlandı.",
+        }
+    }}
