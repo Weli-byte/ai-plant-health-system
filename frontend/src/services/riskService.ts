@@ -7,7 +7,7 @@
 // risk tahmin endpoint'leri için tip-güvenli API çağrıları sağlar.
 // =============================================================================
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 // --- Sprint 3 Types (Legacy) ---
 export type Season = "spring" | "summer" | "autumn" | "winter";

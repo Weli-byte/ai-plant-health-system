@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { UploadCloud, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { aiApi } from '@/services/api';
 
 export default function Analyze() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
@@ -11,7 +12,6 @@ export default function Analyze() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      // Mock: resmi okuyup URL oluştur
       setSelectedFile(file);
       const imageUrl = URL.createObjectURL(file);
       setSelectedImage(imageUrl);
@@ -23,22 +23,9 @@ export default function Analyze() {
     setIsAnalyzing(true);
 
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-
-      const response = await fetch('http://localhost:8000/ai/analyze', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        throw new Error('Yapay zeka analizi sırasında sunucu hatası oluştu.');
-      }
-
-      const resultData = await response.json();
+      const resultData = await aiApi.analyze(selectedFile);
       
       setIsAnalyzing(false);
-      // Sonuç sayfasına geçiş, resmi ve API sonuçlarını state üzerinden taşıyoruz
       navigate('/results', { state: { image: selectedImage, resultData } });
     } catch (error) {
       console.error('Analiz Hatası:', error);
@@ -75,7 +62,7 @@ export default function Analyze() {
             <div className="relative w-full max-w-lg mb-6 rounded-2xl overflow-hidden shadow-md">
                <img src={selectedImage} alt="Seçilen Bitki" className="w-full h-auto object-cover" />
                <button 
-                 onClick={() => setSelectedImage(null)}
+                 onClick={() => { setSelectedImage(null); setSelectedFile(null); }}
                  className="absolute top-4 right-4 bg-white text-red-500 p-2 rounded-full shadow hover:bg-red-50"
                  disabled={isAnalyzing}
                >

@@ -1,107 +1,84 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Leaf } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
+import { FormEvent, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Leaf, Sprout } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { loginMock } from "@/lib/auth";
 
 export default function Login() {
-  const [username, setUsername] = useState('');
-  const [email, setEmail] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    setError('');
-    
-    if (!username || !email) {
-      setError('Lütfen tüm alanları doldurun.');
-      return;
-    }
-
-    setIsLoading(true);
-
-    try {
-      // Mock Login işlemi (Şimdilik direkt giriş yapıyor)
-      // Normalde burada API isteği atılır (Sprint 3) veya Signup için POST /users/
-      const mockUser = {
-        id: Math.floor(Math.random() * 1000),
-        username,
-        email,
-      };
-
-      // AuthContext'e kaydedip Dashboard'a yönlendiriyoruz
-      login(mockUser);
-      navigate('/dashboard');
-    } catch (err) {
-      setError('Giriş başarısız oldu.');
-    } finally {
-      setIsLoading(false);
-    }
+    loginMock(email || "ciftci@plant-health.app");
+    navigate("/");
   };
 
   return (
-    <div className="min-h-screen bg-earth-100 flex items-center justify-center p-4">
-      <div className="bg-white max-w-md w-full rounded-3xl p-8 shadow-xl border border-earth-200">
-        
-        {/* Logo */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-green-100 p-4 rounded-full text-green-600">
-            <Leaf size={48} strokeWidth={2} />
+    <div className="flex min-h-dvh flex-col justify-between bg-earth-gradient px-6 py-10">
+      <div className="mx-auto w-full max-w-sm flex-1 flex flex-col justify-center">
+        <div className="mb-10 text-center">
+          <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-3xl bg-leaf-gradient shadow-soft">
+            <Leaf className="h-8 w-8 text-primary-foreground" />
           </div>
+          <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+            AI Plant Health System'e hoş geldin
+          </h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Tarlanı yapay zekâ ile izle, hastalıkları erken yakala.
+          </p>
         </div>
 
-        <h2 className="text-3xl font-bold text-center text-earth-800 mb-2 font-sans">
-          AgroAI'a Hoş Geldiniz
-        </h2>
-        <p className="text-center text-earth-500 mb-8">
-          Bitkilerinizin sağlığı yapay zeka güvencesinde.
-        </p>
-
-        {error && (
-           <div className="bg-red-50 text-red-600 p-3 rounded-xl mb-4 text-sm text-center">
-             {error}
-           </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-5">
+        <form onSubmit={submit} className="space-y-4">
           <div>
-            <label className="block text-sm font-semibold text-earth-800 mb-1">
-              Kullanıcı Adı
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              E-posta
             </label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-earth-200 focus:outline-none focus:ring-2 focus:ring-green-500 bg-earth-50 text-earth-800 transition-shadow"
-              placeholder="tarim_uzmani"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-semibold text-earth-800 mb-1">
-              E-Posta Adresi
-            </label>
-            <input
+            <Input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl border border-earth-200 focus:outline-none focus:ring-2 focus:ring-green-500 bg-earth-50 text-earth-800 transition-shadow"
-              placeholder="ornek@mail.com"
+              placeholder="ornek@tarla.com"
+              className="h-12 rounded-2xl border-border/60 bg-card"
             />
           </div>
-
-          <button
+          <div>
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              Şifre
+            </label>
+            <Input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              className="h-12 rounded-2xl border-border/60 bg-card"
+            />
+          </div>
+          <Button
             type="submit"
-            disabled={isLoading}
-            className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3.5 px-4 rounded-xl transition-colors disabled:opacity-50"
+            className="h-12 w-full rounded-2xl bg-leaf-gradient text-base font-semibold shadow-soft"
           >
-            {isLoading ? 'Giriş Yapılıyor...' : 'Sisteme Gir'}
-          </button>
+            <Sprout className="mr-2 h-4 w-4" />
+            Giriş yap
+          </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            Hesabın yok mu?{" "}
+            <button
+              type="button"
+              onClick={submit}
+              className="font-semibold text-primary underline-offset-2 hover:underline"
+            >
+              Hemen başla
+            </button>
+          </p>
         </form>
       </div>
+
+      <p className="text-center text-[11px] text-muted-foreground">
+        AI Plant Health System · Doğa dostu tarım için
+      </p>
     </div>
   );
 }
