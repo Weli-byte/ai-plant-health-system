@@ -55,8 +55,19 @@ class Settings:
     ALLOWED_ORIGINS: list = [
         "http://localhost:3000",   # React/Next.js geliştirme sunucusu
         "http://localhost:5173",   # Vite geliştirme sunucusu
+        "http://localhost:8080",   # Vite (Port 8080 kullananlar için)
         "http://127.0.0.1:8000",  # FastAPI kendi sunucusu
     ]
+
+    # External Dataset Ayarları
+    DATASET_PATH: str = os.getenv("DATASET_PATH", "")
+
+    @property
+    def get_dataset_path(self) -> str:
+        """Güvenli bir şekilde dataset yolunu döndür, fallback olarak boş string."""
+        if not self.DATASET_PATH:
+            return ""
+        return self.DATASET_PATH
 
 
 # Ayarların tek bir örneğini oluştur (Singleton pattern)

@@ -109,10 +109,14 @@ class ModelStore:
             RuntimeError:       ultralytics yükleme hatası.
         """
         if not model_path.exists():
-            raise FileNotFoundError(
-                f"YOLOv8 model dosyası bulunamadı: {model_path}\n"
-                "Weli'nin eğittiği .pt dosyasını 'models/' klasörüne yerleştirin."
-            )
+            logger.warning(f"YOLOv8 custom model {model_path} not found. Falling back to base yolov8n.pt")
+            try:
+                from ultralytics import YOLO  # type: ignore
+                self.yolo = YOLO("yolov8n.pt") # Base detection model for fallback
+                logger.info("✅ YOLOv8 base model loaded.")
+                return
+            except Exception as exc:
+                raise RuntimeError(f"YOLOv8 fallback failed: {exc}") from exc
 
         try:
             from ultralytics import YOLO  # type: ignore
@@ -144,10 +148,13 @@ class ModelStore:
             RuntimeError:       Model yükleme hatası.
         """
         if not model_path.exists():
-            raise FileNotFoundError(
-                f"EfficientNet model dosyası bulunamadı: {model_path}\n"
-                "Weli'nin eğittiği .pt dosyasını 'models/' klasörüne yerleştirin."
-            )
+            logger.warning(f"EfficientNet custom model {model_path} not found. Falling back to base EfficientNet.")
+            from torchvision import models
+            self.efficientnet = models.efficientnet_b3(pretrained=True)
+            self.efficientnet.to(self.device)
+            self.efficientnet.eval()
+            self.gradcam_target_layer = self._find_gradcam_layer(self.efficientnet)
+            return
 
         logger.info(f"EfficientNet-B3 yükleniyor: {model_path}")
         try:

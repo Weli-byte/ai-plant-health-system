@@ -1,3 +1,11 @@
 data/
+datasets/
 *.pt
+*.pth
+*.pkl
 *.zip
+.env
+__pycache__/
+venv/
+*.db
+backend/plant_health.db

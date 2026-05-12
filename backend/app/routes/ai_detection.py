@@ -496,6 +496,8 @@ async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
     """
     msg = request.message.lower()
     
+    import random
+    
     # Gelişmiş Bilgi Tabanlı Mantık (API üzerinden gelen gerçek yanıtlar)
     if any(k in msg for k in ["külleme", "mildew", "beyaz leke"]):
         response = (
@@ -521,14 +523,34 @@ async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
             "fungisitler (Bordo bulamacı gibi) bu hastalıkta oldukça etkilidir. "
             "Hastalıklı yaprakları derhal imha edin."
         )
-    elif "merhaba" in msg or "selam" in msg:
-        response = "Merhaba! Ben Agro AI. Bitkileriniz hakkında her türlü soruyu bana sorabilirsiniz. Size nasıl yardımcı olabilirim?"
-    else:
+    elif any(k in msg for k in ["ek", "tohum", "dikim", "ne ekmeliyim", "mevsim"]):
         response = (
-            "Bu konuda size en doğru bilgiyi verebilmem için bitkinizin bir fotoğrafını "
-            "'Tahlil' kısmından yüklemenizi öneririm. Genel bir tavsiye olarak; "
-            "bitkinizin havalandırmasını artırmak ve nem dengesini korumak çoğu hastalığı önleyecektir."
+            "Ekim yapacağınız bitki mevsime ve bölgenizin toprak yapısına göre değişir. "
+            "İlkbahar aylarında (Mart-Mayıs) domates, biber, patlıcan ekimi uygundur. "
+            "Kış aylarında ise ıspanak, lahana, pırasa gibi soğuğa dayanıklı bitkileri tercih edebilirsiniz. "
+            "Toprağınızı ekimden önce havalandırmayı unutmayın."
         )
+    elif any(k in msg for k in ["hastalık", "hasta", "böcek", "zararlı"]):
+        response = (
+            "Bitkilerdeki hastalıklar genelde mantari, bakteriyel veya zararlı böcek kaynaklıdır. "
+            "Yapraklarda delikler varsa böcekleri, beyaz veya kahverengi lekeler varsa mantarı şüphelenebilirsiniz. "
+            "Kesin bir tanı için uygulamanın 'Yeni Analiz Başlat' kısmından yaprağın fotoğrafını yükleyin."
+        )
+    elif any(k in msg for k in ["bitki", "nedir"]):
+        response = (
+            "Bitkiler ekosistemin temel yapı taşlarıdır. Güneş ışığı, su ve topraktaki besinleri kullanarak "
+            "fotosentez yaparlar ve büyürler. Onlara ne kadar iyi bakarsanız, o kadar verim alırsınız."
+        )
+    elif "merhaba" in msg or "selam" in msg or "naber" in msg:
+        response = "Merhaba! Ben Tarla Asistanın. Bitkileriniz, hastalıklar, sulama veya ekim hakkında aklınıza takılan her şeyi bana sorabilirsiniz. Nasıl yardımcı olabilirim?"
+    else:
+        fallbacks = [
+            "Bu durum için kesin bir şey söylemek zor. En doğru bilgiyi verebilmem için bitkinizin bir fotoğrafını 'Tahlil' kısmından yüklemenizi öneririm. Genel olarak bitkinizin havalandırmasını artırmak ve nem dengesini korumak faydalıdır.",
+            "Anlıyorum. Tarımda her bitkinin tepkisi farklı olabilir. Eğer hastalık şüpheniz varsa, kamerayı açıp analiz yaptırmanız en garantili yoldur. Ayrıca toprağın pH dengesini kontrol etmek her zaman iyi bir fikirdir.",
+            "Sorduğunuz konu tarımda dikkat edilmesi gereken bir detay. Hava koşulları ve bölgenizin iklimi bu durumu etkileyebilir. Spesifik bir hastalık sorunu yaşıyorsanız, lütfen yaprak fotoğrafını taratın.",
+            "Bu konuda size net bir öneri sunabilmem için bitkinin fiziksel durumunu görmem harika olurdu. Fotoğraf yükleyebilir misiniz? O zamana kadar bitkiyi strese sokmamak adına aşırı sulamadan kaçının."
+        ]
+        response = random.choice(fallbacks)
 
     return ChatResponse(
         success=True,

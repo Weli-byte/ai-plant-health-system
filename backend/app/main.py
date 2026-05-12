@@ -38,6 +38,21 @@ from app.routes import ai_sprint3
 # Sprint 4: Week 3 route'larını içe aktar
 from app.routes import risk_v2, multimodal, digital_twin, leaf_detection
 
+# Sprint 4: Week 1 — Global Disease Spread Analysis
+from app.routes import global_risk
+
+# Sprint 4: Continual Learning
+from app.routes import retraining
+
+# Sprint 4: Regional Analytics Engine
+from app.routes import analytics
+
+# Sprint 4: MLOps Automated Retraining
+from app.routes import model_updates
+
+# Sprint 4: External Dataset Management
+from app.routes import dataset
+
 # AI Model deposunu içe aktar (lifespan içinde doldurulacak)
 from app.core.model_manager import model_store
 
@@ -46,6 +61,18 @@ from app.services.risk_v2_service import risk_v2_store
 from app.services.multimodal_service import multimodal_store
 from app.services.digital_twin_service import digital_twin_store
 from app.ml.yolo_detector import yolo_detector
+
+# Sprint 4: Week 1 — Global GNN singleton
+from app.services.global_risk_service import global_gnn_store
+
+# Sprint 4: Continual Learning service
+from app.services.retraining_service import retraining_service
+
+# Sprint 4: Regional Analytics service
+from app.services.analytics_service import analytics_service
+
+# Sprint 4: MLOps service
+from app.services.model_update_service import model_update_service
 
 # Loglama yapılandırması
 logging.basicConfig(
@@ -123,6 +150,18 @@ async def lifespan(app: FastAPI):
     digital_twin_store.load()
     yolo_detector.load_model()
 
+    # Sprint 4: Week 1 — Global GNN model
+    global_gnn_store.load()
+
+    # Sprint 4: Continual Learning — load replay buffer
+    retraining_service.initialize()
+
+    # Sprint 4: Regional Analytics — load mock dataset
+    analytics_service.initialize()
+
+    # Sprint 4: MLOps Infrastructure
+    model_update_service.initialize()
+
     # ──── UYGULAMA ÇALIŞIYOR ─────────────────────────────────────────────────
     yield  # Bu noktada uygulama istekleri karşılar
 
@@ -133,6 +172,10 @@ async def lifespan(app: FastAPI):
     risk_v2_store.unload()
     multimodal_store.unload()
     digital_twin_store.unload()
+    # Sprint 4: Week 1
+    global_gnn_store.unload()
+    # Sprint 4: Continual Learning — persist replay buffer
+    retraining_service.shutdown()
     logger.info("♻️  Bellekten modeller kaldırıldı. Güvenli kapatma tamamlandı.")
 
 
@@ -183,6 +226,21 @@ app.include_router(risk_v2.router)
 app.include_router(multimodal.router)
 app.include_router(digital_twin.router)
 app.include_router(leaf_detection.router)
+
+# Sprint 4: Week 1 — Global Disease Spread Analysis
+app.include_router(global_risk.router)
+
+# Sprint 4: Continual Learning
+app.include_router(retraining.router)
+
+# Sprint 4: Regional Analytics Engine
+app.include_router(analytics.router)
+
+# Sprint 4: MLOps Automated Retraining
+app.include_router(model_updates.router)
+
+# Sprint 4: External Dataset Management
+app.include_router(dataset.router)
 
 
 # =============================================================================

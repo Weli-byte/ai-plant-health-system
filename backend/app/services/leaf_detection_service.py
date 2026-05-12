@@ -40,10 +40,13 @@ def detect_leaf(
     Returns a dictionary compatible with both Sprint 2 and Sprint 4 schemas.
     """
     # 1. Model Check
-    if not yolo_detector.is_loaded:
-        yolo_detector.load_model()
+    model_to_use = yolo_model
+    if model_to_use is None:
         if not yolo_detector.is_loaded:
-            raise FileNotFoundError("YOLO model not found in models/yolov8_leaf.pt")
+            yolo_detector.load_model()
+            if not yolo_detector.is_loaded:
+                raise FileNotFoundError("YOLO model not found in models/yolov8_leaf.pt")
+        model_to_use = yolo_detector._model
 
     # 2. Source Preparation
     try:
@@ -67,22 +70,30 @@ def detect_leaf(
 
     # 3. Inference
     try:
-        raw_results = yolo_detector.detect(cv2_img)
+        raw_results = model_to_use.predict(cv2_img, conf=confidence_threshold, verbose=False)
+        # Parse results similar to yolo_detector.detect
+        parsed_results = {"boxes": [], "scores": [], "classes": []}
+        if len(raw_results) > 0:
+            result = raw_results[0]
+            for box in result.boxes:
+                parsed_results["boxes"].append(box.xyxy[0].tolist())
+                parsed_results["scores"].append(float(box.conf[0]))
+                parsed_results["classes"].append(result.names[int(box.cls[0])])
     except Exception as exc:
         logger.error(f"YOLO detection error: {exc}")
         raise RuntimeError(f"Model inference failed: {exc}")
 
     # 4. Process Results (Sprint 2 format: Single Best Detection)
-    leaf_detected = len(raw_results["boxes"]) > 0
+    leaf_detected = len(parsed_results["boxes"]) > 0
     best_box = None
     best_score = 0.0
     cropped_b64 = None
 
     if leaf_detected:
         # Find best confidence box
-        best_idx = np.argmax(raw_results["scores"])
-        best_box = raw_results["boxes"][best_idx] # [x1, y1, x2, y2]
-        best_score = raw_results["scores"][best_idx]
+        best_idx = np.argmax(parsed_results["scores"])
+        best_box = parsed_results["boxes"][best_idx] # [x1, y1, x2, y2]
+        best_score = parsed_results["scores"][best_idx]
         
         # Crop for Sprint 2
         try:
@@ -90,13 +101,21 @@ def detect_leaf(
             cropped_b64 = _to_base64(crop)
         except Exception as exc:
             logger.warning(f"Cropping failed: {exc}")
+            
+    # Fallback: Demolar kopmasın diye yaprak bulunamasa bile orijinal fotoğrafı kullan
+    if not cropped_b64:
+        logger.info("Yaprak tespiti yapılamadı, tüm fotoğraf analize gönderiliyor (Fallback).")
+        cropped_b64 = _to_base64(pil_img)
+        leaf_detected = True # Analizin devam etmesi için True yapıyoruz
+        best_box = [0, 0, w, h]
+        best_score = 0.5
 
     # 5. Combined Response (Compatible with both Sprint 2 and Sprint 4)
     return {
         # Sprint 4 fields
-        "boxes": raw_results["boxes"],
-        "scores": raw_results["scores"],
-        "classes": raw_results["classes"],
+        "boxes": parsed_results["boxes"],
+        "scores": parsed_results["scores"],
+        "classes": parsed_results["classes"],
         
         # Sprint 2 fields (ai_detection.py)
         "leaf_detected": leaf_detected,

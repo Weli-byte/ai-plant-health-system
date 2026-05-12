@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { plantsApi, diseaseRecordsApi, type Plant, type DiseaseRecord } from "@/services/api";
+import { plantsApi, diseaseRecordsApi, usersApi, type Plant, type DiseaseRecord } from "@/services/api";
 
 interface RecentAnalysis {
   id: string;
@@ -30,6 +30,7 @@ export default function Dashboard() {
   const [plants, setPlants] = useState<Plant[]>([]);
   const [recentAnalyses, setRecentAnalyses] = useState<RecentAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userName, setUserName] = useState("Çiftçi");
 
   useEffect(() => {
     loadDashboardData();
@@ -38,8 +39,35 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
+      // Dinamik kullanıcı yönetimi:
+      let users = [];
+      try {
+        users = await usersApi.getAll();
+      } catch (e) {
+        console.warn("Kullanıcılar alınamadı", e);
+      }
+      
+      let currentUser = users.length > 0 ? users[0] : null;
+      
+      // Eğer hiç kullanıcı yoksa, otomatik bir tane oluştur (Demo için)
+      if (!currentUser) {
+        try {
+          currentUser = await usersApi.create({
+            username: "ciftci_mehmet",
+            email: "mehmet@tarla.com",
+            password: "password123"
+          });
+        } catch (e) {
+          console.error("Kullanıcı oluşturulamadı", e);
+        }
+      }
+
+      const userId = currentUser ? currentUser.id : 1;
+      const currentName = currentUser ? currentUser.username : "Çiftçi";
+      setUserName(currentName);
+
       // 1. Bitkileri çek
-      const userPlants = await plantsApi.getByUser(1);
+      const userPlants = await plantsApi.getByUser(userId);
       setPlants(userPlants);
 
       // 2. Her bitkinin hastalık kayıtlarını çek ve birleştir
@@ -86,7 +114,7 @@ export default function Dashboard() {
       <Card className="overflow-hidden rounded-3xl border-border/60 shadow-card">
         <CardContent className="bg-leaf-gradient p-5 text-primary-foreground">
           <p className="text-xs uppercase tracking-[0.18em] opacity-80">Bugün</p>
-          <h2 className="mt-1 text-xl font-semibold">Merhaba, Mehmet 👋</h2>
+          <h2 className="mt-1 text-xl font-semibold">Merhaba, {userName} 👋</h2>
           <p className="mt-1 text-sm opacity-90">
             {plants.length > 0
               ? `${plants.length} bitkin kayıtlı. Tarlanın durumunu kontrol et.`
