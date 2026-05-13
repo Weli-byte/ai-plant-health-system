@@ -122,11 +122,40 @@ export interface GradCAMResult {
   message: string;
 }
 
+export interface TreatmentProduct {
+  name: string;
+  active_ingredient: string;
+  dose: string;
+  timing: string;
+  frequency: string;
+  price_range_tl: string;
+}
+
+export interface DiseaseEnrichment {
+  disease_name_tr: string;
+  disease_name_en: string;
+  description: string;
+  pathogen_type: string;
+  spread_speed: string;
+  affected_parts: string[];
+  risk_level: number;
+  current_stage: string;
+  spread_risk: string;
+  estimated_timeline: string;
+  treatment_products: TreatmentProduct[];
+  cultural_measures: string[];
+  prognosis_with_treatment: string;
+  prognosis_without_treatment: string;
+  harvest_impact: string;
+  next_season_prevention: string;
+}
+
 export interface FullAnalysisResult {
   success: boolean;
   leaf_detection: LeafDetectionResult;
   disease_classification: DiseaseClassificationResult | null;
   gradcam: GradCAMResult | null;
+  disease_enrichment: DiseaseEnrichment | null;
   message: string;
 }
 

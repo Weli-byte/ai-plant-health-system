@@ -45,10 +45,12 @@ from app.schemas.ai_schemas import (
     ChatResponse,
     DiseaseClassificationRequest,
     DiseaseClassificationResponse,
+    DiseaseEnrichment,
     FullAnalysisResponse,
     GradCAMRequest,
     GradCAMResponse,
     LeafDetectionResponse,
+    TreatmentProduct,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,6 +61,301 @@ def _to_bounding_box(bb) -> "BoundingBox | None":
     if bb is None:
         return None
     return BoundingBox(x1=int(bb[0]), y1=int(bb[1]), x2=int(bb[2]), y2=int(bb[3]))
+
+
+# ---------------------------------------------------------------------------
+# Hastalık Zenginleştirme Veritabanı
+# ---------------------------------------------------------------------------
+
+DISEASE_ENRICHMENT_DB: dict[str, dict] = {
+    "Healthy": {
+        "disease_name_tr": "Sağlıklı Bitki",
+        "disease_name_en": "Healthy",
+        "description": "Bitkide herhangi bir hastalık belirtisi tespit edilmedi. Mevcut bakım uygulamalarını sürdürün.",
+        "pathogen_type": "none",
+        "spread_speed": "none",
+        "affected_parts": [],
+        "risk_level": 1,
+        "current_stage": "Hastalık yok",
+        "spread_risk": "low",
+        "estimated_timeline": "Belirsiz — bitki sağlıklı",
+        "treatment_products": [],
+        "cultural_measures": [
+            "Düzenli sulama programını sürdürün",
+            "Dengeli gübreleme yapın",
+            "Hava sirkülasyonunu sağlamak için budama yapın",
+            "Toprağın nem dengesini izleyin",
+        ],
+        "prognosis_with_treatment": "Bitki sağlıklı durumda kalmaya devam edecek.",
+        "prognosis_without_treatment": "Önlem alınmazsa çevresel stres faktörlerine karşı savunmasız kalabilir.",
+        "harvest_impact": "Hasatta herhangi bir olumsuz etki beklenmemektedir.",
+        "next_season_prevention": "Sertifikalı tohumluk kullanın ve rotasyon uygulayın.",
+    },
+    "Powdery Mildew": {
+        "disease_name_tr": "Külleme",
+        "disease_name_en": "Powdery Mildew",
+        "description": "Yaprak yüzeyinde beyaz unlu lekeler oluşturan fungal bir hastalık. Yüksek nem ve ılık havada hızla yayılır.",
+        "pathogen_type": "fungal",
+        "spread_speed": "fast",
+        "affected_parts": ["Yapraklar", "Sürgünler", "Çiçekler", "Meyveler"],
+        "risk_level": 3,
+        "current_stage": "Aktif enfeksiyon",
+        "spread_risk": "high",
+        "estimated_timeline": "Tedavi edilmezse 7-14 gün içinde tüm bitkiye yayılabilir",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Thiovit Jet",
+                active_ingredient="Kükürt (%80 WG)",
+                dose="200-300 g / 100 L su",
+                timing="Sabah erken veya akşam serinliğinde",
+                frequency="7-10 günde bir",
+                price_range_tl="150-250 TL/kg",
+            ),
+            TreatmentProduct(
+                name="Topas 100 EC",
+                active_ingredient="Penkonazol (%10 EC)",
+                dose="10 ml / 100 L su",
+                timing="İlk belirtilerde hemen",
+                frequency="14 günde bir, max 3 uygulama",
+                price_range_tl="200-350 TL/250 ml",
+            ),
+        ],
+        "cultural_measures": [
+            "Enfekte yaprakları hemen uzaklaştırın ve imha edin",
+            "Bitki sıralarının arasındaki mesafeyi artırarak hava sirkülasyonu sağlayın",
+            "Akşam saatlerinde sulamaktan kaçının",
+            "Azotlu gübreyi aşırı kullanmayın",
+        ],
+        "prognosis_with_treatment": "Fungisit uygulaması ile 10-14 gün içinde yeni enfeksiyon durur ve mevcut lekeler kurur.",
+        "prognosis_without_treatment": "Hastalık hızla yayılır, fotosentez kapasitesi düşer, ürün kaybı %30-50'ye ulaşabilir.",
+        "harvest_impact": "Erken müdahale ile hasat kaybı %10 altında tutulabilir. Gecikme durumunda %30-50 kayıp riski.",
+        "next_season_prevention": "Dayanıklı çeşitler seçin. İlkbahar başında kükürt bazlı koruyucu uygulama yapın.",
+    },
+    "Leaf Blight": {
+        "disease_name_tr": "Yaprak Yanıklığı",
+        "disease_name_en": "Leaf Blight",
+        "description": "Yapraklarda kahverengi-siyah nekrotik lekeler oluşturan fungal/bakteriyel bir hastalık. Serin ve yağışlı havalarda hızlanır.",
+        "pathogen_type": "fungal",
+        "spread_speed": "medium",
+        "affected_parts": ["Yapraklar", "Yaprak sapları", "Alt gövde"],
+        "risk_level": 3,
+        "current_stage": "Erken-orta evre enfeksiyon",
+        "spread_risk": "medium",
+        "estimated_timeline": "14-21 gün içinde ciddi doku kaybı oluşabilir",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Dithane M-45",
+                active_ingredient="Mankozeb (%80 WP)",
+                dose="200 g / 100 L su",
+                timing="Yağmur öncesi ve sonrası",
+                frequency="7-10 günde bir",
+                price_range_tl="100-180 TL/kg",
+            ),
+            TreatmentProduct(
+                name="Ridomil Gold",
+                active_ingredient="Metalaksil + Mankozeb",
+                dose="250 g / 100 L su",
+                timing="Hastalık ilk görüldüğünde",
+                frequency="10-14 günde bir",
+                price_range_tl="300-450 TL/kg",
+            ),
+        ],
+        "cultural_measures": [
+            "Hasta yaprakları toplayarak yakın veya derin gömin",
+            "Toprak sıçramasını önlemek için malç kullanın",
+            "Sulamayı sabah saatlerinde yapın",
+            "Rotasyon uygulayın — aynı aileyi arka arkaya dikmekten kaçının",
+        ],
+        "prognosis_with_treatment": "Erken müdahale ile 2-3 hafta içinde hastalık kontrol altına alınabilir.",
+        "prognosis_without_treatment": "Yaprak kaybı artar, fotosentez düşer, verim %20-40 azalabilir.",
+        "harvest_impact": "Orta düzeyde etki — erken müdahale ile %15 altında kayıp mümkün.",
+        "next_season_prevention": "Sertifikalı tohumluk kullanın. Ekim öncesi toprak fungisit uygulaması yapın.",
+    },
+    "Rust": {
+        "disease_name_tr": "Pas Hastalığı",
+        "disease_name_en": "Rust",
+        "description": "Yaprak altında turuncu-kahverengi spor yığınları oluşturan fungal hastalık. Rüzgarla kolayca yayılır.",
+        "pathogen_type": "fungal",
+        "spread_speed": "fast",
+        "affected_parts": ["Yapraklar (alt yüzey)", "Yaprak sapları", "Gövde"],
+        "risk_level": 4,
+        "current_stage": "Aktif sporlanma evresi",
+        "spread_risk": "high",
+        "estimated_timeline": "Uygun koşullarda 5-10 gün içinde yeni enfeksiyonlar oluşur",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Tilt 250 EC",
+                active_ingredient="Propikonazol (%25 EC)",
+                dose="10-15 ml / 100 L su",
+                timing="İlk pas lekeleri görüldüğünde derhal",
+                frequency="14-21 günde bir",
+                price_range_tl="180-280 TL/250 ml",
+            ),
+            TreatmentProduct(
+                name="Folicur 250 EW",
+                active_ingredient="Tebukonazol (%25 EW)",
+                dose="10 ml / 100 L su",
+                timing="Koruyucu veya tedavi amaçlı",
+                frequency="14 günde bir, max 3 uygulama",
+                price_range_tl="200-320 TL/500 ml",
+            ),
+        ],
+        "cultural_measures": [
+            "Enfekte bitki artıklarını tarladan uzaklaştırın",
+            "Dayanıklı çeşitler tercih edin",
+            "Bitki sıklığını azaltarak hava sirkülasyonunu iyileştirin",
+            "Alternatif konakçı bitkileri yakın alanlarda yetiştirmeyin",
+        ],
+        "prognosis_with_treatment": "Sistemik fungisit ile 7-10 gün içinde sporlanma durur; yeni yapraklar sağlıklı çıkar.",
+        "prognosis_without_treatment": "Sporlar rüzgarla yayılarak tüm tarlayı etkiler; verim kaybı %40-70'e ulaşabilir.",
+        "harvest_impact": "Yüksek etki — gecikmeli müdahale ile %30-50 verim kaybı riski.",
+        "next_season_prevention": "Hasat sonrası bitki artıklarını imha edin. İlkbaharda koruyucu triazol uygulaması yapın.",
+    },
+    "Leaf Spot": {
+        "disease_name_tr": "Yaprak Leke Hastalığı",
+        "disease_name_en": "Leaf Spot",
+        "description": "Yapraklarda belirgin kenarlı koyu lekeler oluşturan fungal veya bakteriyel hastalık. Nemli koşullarda artar.",
+        "pathogen_type": "fungal",
+        "spread_speed": "medium",
+        "affected_parts": ["Yapraklar", "Meyveler", "Sürgünler"],
+        "risk_level": 2,
+        "current_stage": "Başlangıç-orta evre",
+        "spread_risk": "medium",
+        "estimated_timeline": "2-4 hafta içinde lekeler büyür ve birleşebilir",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Captan 50 WP",
+                active_ingredient="Kaptan (%50 WP)",
+                dose="150-200 g / 100 L su",
+                timing="Yağış öncesi koruyucu uygulama",
+                frequency="10-14 günde bir",
+                price_range_tl="80-140 TL/kg",
+            ),
+        ],
+        "cultural_measures": [
+            "Hasta yaprakları toplayıp imha edin",
+            "Aşırı sulama ve üstten sulamadan kaçının",
+            "Dayanıklı çeşit kullanın",
+            "Bitkileri aşırı sık dikmekten kaçının",
+        ],
+        "prognosis_with_treatment": "Erken müdahale ile 2-3 hafta içinde kontrol sağlanır.",
+        "prognosis_without_treatment": "Lekeler büyür, yaprak dökümü artar, kalite düşer.",
+        "harvest_impact": "Hafif-orta etki. Meyve kalitesi düşebilir (%10-25 pazar değeri kaybı).",
+        "next_season_prevention": "Toprak rotasyonu uygulayın. Ekim öncesi fide dezenfeksiyonu yapın.",
+    },
+    "Bacterial Wilt": {
+        "disease_name_tr": "Bakteriyel Solgunluk",
+        "disease_name_en": "Bacterial Wilt",
+        "description": "İletim demetlerini tıkayan bakteri enfeksiyonu. Bitki aniden solar ve kurur. İklim değişiminden etkilenir.",
+        "pathogen_type": "bacterial",
+        "spread_speed": "fast",
+        "affected_parts": ["İletim demetleri", "Gövde", "Yapraklar", "Kökler"],
+        "risk_level": 5,
+        "current_stage": "Aktif sistemik enfeksiyon",
+        "spread_risk": "high",
+        "estimated_timeline": "Semptomsuz dönem sonrası 3-7 günde hızlı çöküş",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Kocide 2000",
+                active_ingredient="Bakır hidroksit (%53.8 WG)",
+                dose="150-250 g / 100 L su",
+                timing="Önleyici; hastalık görülmeden önce",
+                frequency="7-10 günde bir",
+                price_range_tl="250-400 TL/kg",
+            ),
+        ],
+        "cultural_measures": [
+            "Hasta bitkileri derhal söküp yakın — kompostlamayın",
+            "Enfekte toprakta en az 3 yıl rotasyon uygulayın",
+            "Sulama ekipmanlarını %10 çamaşır suyu ile dezenfekte edin",
+            "Böcek vektörlerini (özellikle nematodları) kontrol edin",
+        ],
+        "prognosis_with_treatment": "Kimyasal tedavi sınırlı etkili; dayanıklı çeşit ve rotasyon esas çözümdür.",
+        "prognosis_without_treatment": "Bitki kaybı kaçınılmaz. Enfeksiyon toprağa ve komşu bitkilere yayılır.",
+        "harvest_impact": "Çok yüksek — enfekte bitkiler tamamen yitirilir (%80-100 kayıp).",
+        "next_season_prevention": "Sadece sertifikalı ve dayanıklı çeşit kullanın. Toprak fumigasyonu değerlendirin.",
+    },
+    "Mosaic Virus": {
+        "disease_name_tr": "Mozaik Virüsü",
+        "disease_name_en": "Mosaic Virus",
+        "description": "Yapraklarda sarı-yeşil mozaik desen, kıvırma ve bodurlaşmaya yol açan viral enfeksiyon. Yaprak bitleri ile taşınır.",
+        "pathogen_type": "viral",
+        "spread_speed": "medium",
+        "affected_parts": ["Yapraklar", "Sürgünler", "Meyveler"],
+        "risk_level": 4,
+        "current_stage": "Sistemik viral enfeksiyon",
+        "spread_risk": "high",
+        "estimated_timeline": "Viral yayılım 2-4 hafta içinde tüm bitkiyi etkiler",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Confidor 200 OD",
+                active_ingredient="İmidakloprid (%17.8 OD)",
+                dose="5 ml / 100 L su",
+                timing="Yaprak biti vektörlerine karşı",
+                frequency="Gerektiğinde, max 2 uygulama",
+                price_range_tl="120-200 TL/250 ml",
+            ),
+        ],
+        "cultural_measures": [
+            "Virüslü bitkileri söküp imha edin — tedavi mümkün değil",
+            "Vektör böcekleri (yaprak bitleri, thrips) ilaçla kontrol edin",
+            "Tarla çevresinde böcek bariyer sistemleri kullanın",
+            "Ekipmanları bitki aralarında dezenfekte edin",
+        ],
+        "prognosis_with_treatment": "Virüse karşı doğrudan tedavi yoktur; vektör kontrolü ile yeni enfeksiyon yavaşlatılabilir.",
+        "prognosis_without_treatment": "Tüm bitkiler etkilenebilir, verim %50-80 düşer.",
+        "harvest_impact": "Yüksek — meyve kalitesi ve miktarı ciddi şekilde düşer.",
+        "next_season_prevention": "Virüse dayanıklı çeşit seçin. Sertifikalı fide/tohumluk kullanın.",
+    },
+    "Anthracnose": {
+        "disease_name_tr": "Antraknoz",
+        "disease_name_en": "Anthracnose",
+        "description": "Yaprak, dal ve meyvelerde koyu çöküntülü lekeler oluşturan fungal hastalık. Islak ve sıcak havalarda hızla yayılır.",
+        "pathogen_type": "fungal",
+        "spread_speed": "fast",
+        "affected_parts": ["Meyveler", "Yapraklar", "Dallar", "Çiçekler"],
+        "risk_level": 3,
+        "current_stage": "Aktif enfeksiyon",
+        "spread_risk": "high",
+        "estimated_timeline": "Yağmurlu havalarda 3-5 günde hızlı yayılma",
+        "treatment_products": [
+            TreatmentProduct(
+                name="Mancozeb 80 WP",
+                active_ingredient="Mankozeb (%80 WP)",
+                dose="200 g / 100 L su",
+                timing="Yağmur öncesi ve çiçeklenme döneminde",
+                frequency="7-10 günde bir",
+                price_range_tl="90-150 TL/kg",
+            ),
+            TreatmentProduct(
+                name="Switch 62.5 WG",
+                active_ingredient="Siprodinil + Fludioksonil",
+                dose="80 g / 100 L su",
+                timing="Hastalık başlangıcında veya çiçeklenme öncesi",
+                frequency="10-14 günde bir, max 2 uygulama",
+                price_range_tl="350-500 TL/250 g",
+            ),
+        ],
+        "cultural_measures": [
+            "Hasta meyve ve dalları toplayıp imha edin",
+            "Hasattan önce meyveler üstüne su değdirmeyin",
+            "Budama aletlerini her kullanım sonrası dezenfekte edin",
+            "Çiçeklenme döneminde koruyucu fungisit uygulaması yapın",
+        ],
+        "prognosis_with_treatment": "Erken müdahale ile 14-21 gün içinde hastalık baskılanır; yeni meyveler sağlıklı gelişir.",
+        "prognosis_without_treatment": "Tüm hasadı tehdit eder — meyveler satılamaz hale gelir.",
+        "harvest_impact": "Çok yüksek etki — pazar değeri sıfıra düşebilir (%60-90 kayıp).",
+        "next_season_prevention": "Dayanıklı çeşit seçin. Çiçeklenme öncesi bakır bazlı koruyucu uygulayın.",
+    },
+}
+
+
+def _get_disease_enrichment(predicted_class: str) -> "DiseaseEnrichment | None":
+    """Tahmin edilen sınıfa göre hastalık zenginleştirme verisini döndür."""
+    data = DISEASE_ENRICHMENT_DB.get(predicted_class)
+    if data is None:
+        return None
+    return DiseaseEnrichment(**data)
 
 
 # Router tanımı — prefix /ai, tüm endpoint'ler bu prefix altında
@@ -499,7 +796,12 @@ async def analyze_endpoint(
             logger.error(f"Analyze - Grad-CAM hatası: {exc}")
             # Grad-CAM başarısız olsa bile diğer sonuçları döndür
 
-    # --- Adım 5: Birleşik Yanıt ---
+    # --- Adım 5: Hastalık Zenginleştirme ---
+    enrichment = None
+    if disease_response is not None:
+        enrichment = _get_disease_enrichment(disease_response.predicted_class)
+
+    # --- Adım 6: Birleşik Yanıt ---
     final_message = "Tam AI analizi tamamlandı."
     if disease_response is None:
         final_message = "Yaprak tespit edildi fakat hastalık sınıflandırması başarısız oldu."
@@ -511,6 +813,7 @@ async def analyze_endpoint(
         leaf_detection=leaf_response,
         disease_classification=disease_response,
         gradcam=gradcam_response,
+        disease_enrichment=enrichment,
         message=final_message,
     )
 # =============================================================================

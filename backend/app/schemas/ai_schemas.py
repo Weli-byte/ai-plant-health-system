@@ -204,11 +204,41 @@ class GradCAMResponse(BaseModel):
 # Endpoint: /ai/analyze (Tam İşlem Akışı)
 # ---------------------------------------------------------------------------
 
+class TreatmentProduct(BaseModel):
+    """Tedavi planındaki tek bir ilaç/ürün."""
+    name: str = Field(..., description="Ticari ürün adı.")
+    active_ingredient: str = Field(..., description="Aktif madde.")
+    dose: str = Field(..., description="Uygulama dozu.")
+    timing: str = Field(..., description="Uygulama zamanlaması.")
+    frequency: str = Field(..., description="Uygulama sıklığı.")
+    price_range_tl: str = Field(..., description="Tahmini fiyat aralığı (TL).")
+
+
+class DiseaseEnrichment(BaseModel):
+    """Hastalık hakkında zenginleştirilmiş bilgi paketi."""
+    disease_name_tr: str = Field(..., description="Hastalığın Türkçe adı.")
+    disease_name_en: str = Field(..., description="Hastalığın İngilizce adı.")
+    description: str = Field(..., description="Hastalık açıklaması.")
+    pathogen_type: str = Field(..., description="Etken tipi: fungal/bacterial/viral/pest/none.")
+    spread_speed: str = Field(..., description="Yayılma hızı: slow/medium/fast/none.")
+    affected_parts: list[str] = Field(..., description="Etkilenen bitki bölümleri.")
+    risk_level: int = Field(..., ge=1, le=5, description="Risk seviyesi (1-5).")
+    current_stage: str = Field(..., description="Mevcut hastalık evresi.")
+    spread_risk: str = Field(..., description="Yayılma riski: low/medium/high.")
+    estimated_timeline: str = Field(..., description="Tahmini gelişim süresi.")
+    treatment_products: list[TreatmentProduct] = Field(..., description="Önerilen ilaçlar.")
+    cultural_measures: list[str] = Field(..., description="Kültürel önlemler.")
+    prognosis_with_treatment: str = Field(..., description="Tedavi ile prognoz.")
+    prognosis_without_treatment: str = Field(..., description="Tedavisiz prognoz.")
+    harvest_impact: str = Field(..., description="Hasat üzerindeki etkisi.")
+    next_season_prevention: str = Field(..., description="Gelecek sezon önleme önerileri.")
+
+
 class FullAnalysisResponse(BaseModel):
     """
     /ai/analyze endpoint'inin yanıt şeması.
     Tek seferde tüm pipeline çalıştırır:
-    YOLO → EfficientNet → Grad-CAM
+    YOLO → EfficientNet → Grad-CAM → DiseaseEnrichment
     """
     success: bool
     leaf_detection: LeafDetectionResponse
@@ -219,6 +249,10 @@ class FullAnalysisResponse(BaseModel):
     gradcam: Optional[GradCAMResponse] = Field(
         None,
         description="Sınıflandırma başarılıysa doldurulur, yoksa null."
+    )
+    disease_enrichment: Optional[DiseaseEnrichment] = Field(
+        None,
+        description="Hastalık zenginleştirme verisi. Sınıflandırma başarılıysa doldurulur."
     )
     message: str
 

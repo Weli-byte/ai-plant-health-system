@@ -1,4 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router-dom";
 import { Send, Sparkles, Sprout, Sun, Droplets, Wheat } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { aiApi, ChatHistoryMessage } from "@/services/api";
@@ -17,6 +18,9 @@ const suggestions = [
 ];
 
 export default function Chat() {
+  const location = useLocation();
+  const prefill: string | undefined = location.state?.prefill;
+
   const [messages, setMessages] = useState<Msg[]>([
     {
       id: 1,
@@ -25,7 +29,7 @@ export default function Chat() {
         "Merhaba 🌿 Ben deneyimli bir Türk ziraat mühendisiyim. Bitkilerin, hastalıklar, sulama ya da ne ekeceğin hakkında istediğini sorabilirsin. Fotoğraf yükleyerek anında analiz de yaptırabilirsin.",
     },
   ]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(prefill ?? "");
   const [thinking, setThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
