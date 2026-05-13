@@ -12,10 +12,10 @@ export function getUser(): MockUser | null {
   }
 }
 
-export function loginMock(email: string) {
+export function loginMock(email: string, name?: string) {
   const user: MockUser = {
     email,
-    name: email.split("@")[0] || "Çiftçi",
+    name: name?.trim() || email.split("@")[0] || "Çiftçi",
   };
   localStorage.setItem(KEY, JSON.stringify(user));
   return user;
