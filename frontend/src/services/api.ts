@@ -416,3 +416,102 @@ export const sprint3Api = {
       body: JSON.stringify(data),
     }),
 };
+
+// ---------------------------------------------------------------------------
+// Reports & Analytics API
+// ---------------------------------------------------------------------------
+
+export interface DailyDataItem {
+  date: string;
+  label: string;
+  healthy: number;
+  diseased: number;
+  total: number;
+}
+
+export interface DiseaseDistributionItem {
+  name: string;
+  count: number;
+  last_date: string;
+}
+
+export interface MonthlyDataItem {
+  year: number;
+  month: number;
+  label: string;
+  total: number;
+  healthy: number;
+  health_pct: number;
+  top_disease: string;
+}
+
+export interface ReportSummary {
+  total: number;
+  healthy: number;
+  diseased: number;
+  this_week: number;
+  daily_data: DailyDataItem[];
+  disease_distribution: DiseaseDistributionItem[];
+  health_score: number;
+  active_diseases: number;
+  risk_level: string;
+  monthly_data: MonthlyDataItem[];
+  is_demo: boolean;
+}
+
+export interface DiseaseRisk {
+  name: string;
+  probability: number;
+  severity: string;
+  reason: string;
+  prevention: string;
+}
+
+export interface RiskPredictionResult {
+  overall_risk: string;
+  risk_score: number;
+  confidence: number;
+  disease_risks: DiseaseRisk[];
+  immediate_actions: string[];
+  week_forecast: string;
+  optimal_spray_window: { start_day: number; end_day: number; reason: string };
+  economic_risk_percent: number;
+  economic_risk_tl_per_dekar: number;
+}
+
+export interface WeatherDay {
+  date: string;
+  day_label: string;
+  weekday: string;
+  temp_max: number;
+  rain: number;
+  wind: number;
+  suitability: "ideal" | "caution" | "unsuitable";
+  suggestion: string;
+}
+
+export const reportsApi = {
+  getSummary: (email: string) =>
+    request<ReportSummary>(`/api/reports/summary?email=${encodeURIComponent(email)}`),
+};
+
+export const riskPredictionApi = {
+  predict: (data: {
+    temp: number;
+    humidity: number;
+    rain: number;
+    wind: number;
+    soil: string;
+    crop: string;
+    stage: string;
+  }) =>
+    request<RiskPredictionResult>("/api/risk-prediction", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
+
+export const weatherApi = {
+  getForecast: (lat: number, lon: number) =>
+    request<{ days: WeatherDay[] }>(`/api/weather/forecast?lat=${lat}&lon=${lon}`),
+};

@@ -552,6 +552,159 @@ app.post("/api/v2/multimodal_predict", (req, res) => {
 });
 
 // =============================================================================
+// 7. REPORTS & ANALYTICS
+// =============================================================================
+
+// GET /api/reports/summary?email= — Dashboard özet
+app.get("/api/reports/summary", (req, res) => {
+  const email = req.query.email || "";
+  console.log(`📊 Rapor özeti isteği: ${email}`);
+
+  const userRecords = analysisRecords.filter((r) => r.user_email === email);
+  const isDemo = userRecords.length === 0;
+
+  const now = new Date();
+  const days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+  const months = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+
+  const buildDailyData = (records) => {
+    const daily = [];
+    for (let i = 6; i >= 0; i--) {
+      const day = new Date(now);
+      day.setDate(now.getDate() - i);
+      const dayStr = day.toISOString().split("T")[0];
+      const dayRecs = records.filter((r) => r.created_at && r.created_at.startsWith(dayStr));
+      const h = dayRecs.filter((r) => (r.risk_level || 3) === 1).length;
+      daily.push({
+        date: dayStr,
+        label: days[(day.getDay() + 6) % 7],
+        healthy: h,
+        diseased: dayRecs.length - h,
+        total: dayRecs.length,
+      });
+    }
+    return daily;
+  };
+
+  if (isDemo) {
+    const demoDaily = [];
+    const dh = [2,3,1,4,2,3,5], dd = [1,0,2,1,1,2,1];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(now); day.setDate(now.getDate() - (6 - i));
+      demoDaily.push({ date: day.toISOString().split("T")[0], label: days[(day.getDay()+6)%7], healthy: dh[i], diseased: dd[i], total: dh[i]+dd[i] });
+    }
+    return res.json({
+      total: 24, healthy: 17, diseased: 7, this_week: 8,
+      daily_data: demoDaily,
+      disease_distribution: [
+        { name: "Sağlıklı Bitki", count: 17, last_date: "12.05.2026" },
+        { name: "Külleme", count: 4, last_date: "10.05.2026" },
+        { name: "Yaprak Yanıklığı", count: 2, last_date: "08.05.2026" },
+        { name: "Pas Hastalığı", count: 1, last_date: "05.05.2026" },
+      ],
+      health_score: 71, active_diseases: 3, risk_level: "Orta",
+      monthly_data: [
+        { year: 2026, month: 5, label: "May 2026", total: 15, healthy: 11, health_pct: 73, top_disease: "Külleme" },
+        { year: 2026, month: 4, label: "Nis 2026", total: 9, healthy: 6, health_pct: 67, top_disease: "Yaprak Yanıklığı" },
+      ],
+      is_demo: true,
+    });
+  }
+
+  const total = userRecords.length;
+  const healthy = userRecords.filter((r) => (r.risk_level || 3) === 1).length;
+  const weekAgo = new Date(now); weekAgo.setDate(now.getDate() - 7);
+  const thisWeek = userRecords.filter((r) => new Date(r.created_at) > weekAgo).length;
+  const healthScore = Math.round((healthy / total) * 100);
+  const riskLevel = healthScore >= 70 ? "Düşük" : healthScore >= 40 ? "Orta" : "Yüksek";
+
+  const diseaseCounts = {};
+  userRecords.forEach((r) => {
+    const n = r.disease_name_tr || "Bilinmiyor";
+    diseaseCounts[n] = (diseaseCounts[n] || 0) + 1;
+  });
+  const distribution = Object.entries(diseaseCounts)
+    .sort((a, b) => b[1] - a[1]).slice(0, 7)
+    .map(([name, count]) => ({ name, count, last_date: new Date().toLocaleDateString("tr-TR") }));
+  const activeDiseases = Object.keys(diseaseCounts).filter((n) => !n.toLowerCase().includes("sağlıklı") && !n.toLowerCase().includes("healthy")).length;
+
+  res.json({
+    total, healthy, diseased: total - healthy, this_week: thisWeek,
+    daily_data: buildDailyData(userRecords),
+    disease_distribution: distribution,
+    health_score: healthScore, active_diseases: activeDiseases, risk_level: riskLevel,
+    monthly_data: [],
+    is_demo: false,
+  });
+});
+
+// POST /api/risk-prediction — Kural tabanlı risk tahmini (mock)
+app.post("/api/risk-prediction", (req, res) => {
+  const { temp = 22, humidity = 65, rain = 5, wind = 12, soil = "Killi", crop = "Domates", stage = "Vejetatif" } = req.body;
+  console.log(`🌡️ Risk tahmini: ${temp}°C, %${humidity} nem, ${crop}`);
+
+  const score = Math.min(Math.round(humidity * 0.45 + temp * 0.25 + rain * 0.3), 95);
+  const overall = score < 30 ? "Düşük" : score < 55 ? "Orta" : score < 78 ? "Yüksek" : "Kritik";
+
+  setTimeout(() => {
+    res.json({
+      overall_risk: overall, risk_score: score, confidence: 74,
+      disease_risks: [
+        { name: "Külleme", probability: Math.min(Math.round(humidity * 0.75), 90), severity: "Orta",
+          reason: "Yüksek nem ve ılıman sıcaklık külleme gelişimine elverişli koşullar oluşturuyor.",
+          prevention: "Kükürt bazlı fungisit 7 günde bir uygulayın." },
+        { name: "Yaprak Yanıklığı", probability: Math.min(Math.round(rain * 0.9 + 8), 85), severity: "Yüksek",
+          reason: "Yağış sonrası yaprak ıslaklık süresi Phytophthora sporlanmasını tetikler.",
+          prevention: "Bakır oksiklorür (3 g/L) ile akşam saatlerinde koruyucu uygulama yapın." },
+        { name: "Botrytis", probability: Math.min(Math.round(humidity * 0.4 + rain * 0.3), 60), severity: "Düşük",
+          reason: "Nemli ortam gri küf riskini artırır.",
+          prevention: "Hava sirkülasyonunu artırın, hasat öncesi ilaçlamayı durdurun." },
+      ],
+      immediate_actions: [
+        score > 50 ? "Koruyucu fungisit uygulayın" : "Standart bakım rutinine devam edin",
+        "Günlük sabah yaprak ıslaklık kontrolü yapın",
+        "Sulama saatini gündüz erken saatlerine alın",
+      ],
+      week_forecast: `Önümüzdeki 7 gün ${overall.toLowerCase()} risk düzeyinde seyredecektir. ${humidity > 70 ? "Nem yüksekliği kritik eşiği aşabilir, ilaçlama takvimine uyun." : "Koşullar görece stabil, rutin kontrole devam edin."}`,
+      optimal_spray_window: { start_day: 2, end_day: 4, reason: "Yağış arası kuru pencerede sabah 07–10 arası rüzgarsız koşullarda uygulayın." },
+      economic_risk_percent: Math.min(score + 5, 95),
+      economic_risk_tl_per_dekar: score * 130,
+    });
+  }, 1200);
+});
+
+// GET /api/weather/forecast?lat=&lon= — Mock 14 günlük hava tahmini
+app.get("/api/weather/forecast", (req, res) => {
+  const { lat = 39.0, lon = 35.0 } = req.query;
+  console.log(`☀️ Hava tahmini isteği: lat=${lat}, lon=${lon}`);
+
+  const now = new Date();
+  const days = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+  const months = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+  const conditions = [
+    [22, 0, 8], [25, 0, 7], [28, 0.5, 12], [26, 0, 9],
+    [20, 8, 25], [18, 12, 30], [22, 2, 15], [24, 0, 10],
+    [27, 0, 8], [29, 0, 11], [30, 0, 9], [26, 1, 14],
+    [23, 5, 18], [21, 0, 8],
+  ];
+
+  const result = conditions.map(([temp, rain, wind], i) => {
+    const dt = new Date(now); dt.setDate(now.getDate() + i);
+    const suitability = (rain > 1 || wind > 20 || temp > 35) ? "unsuitable"
+      : (rain > 0 || wind > 15 || temp > 28) ? "caution" : "ideal";
+    const suggestion = suitability === "unsuitable" ? "Bekleyin"
+      : suitability === "caution" ? "Dikkatli olun" : "Sabah erken uygulayın";
+    return {
+      date: dt.toISOString().split("T")[0],
+      day_label: `${dt.getDate()} ${months[dt.getMonth()]}`,
+      weekday: days[(dt.getDay() + 6) % 7],
+      temp_max: temp, rain, wind, suitability, suggestion,
+    };
+  });
+  res.json({ days: result });
+});
+
+// =============================================================================
 // START SERVER
 // =============================================================================
 
