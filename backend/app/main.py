@@ -29,11 +29,20 @@ import app.models.user            # noqa: F401
 import app.models.plant           # noqa: F401
 import app.models.disease_record  # noqa: F401
 
+# Sprint 4 (Son Aşama): Yeni tablolar için SQLAlchemy modelleri
+# Bu satırlar olmadan Base.metadata.create_all() bu tabloları oluşturmaz!
+import app.models.regional_disease_data  # noqa: F401  → regional_disease_data tablosu
+import app.models.model_update_record    # noqa: F401  → model_updates tablosu
+
 # Route'ları içe aktar
 from app.routes import users, plants, disease_records, ai_detection
 
 # Sprint 3: Tarım Karar Destek Sistemi route'larını içe aktar
 from app.routes import ai_sprint3
+
+# Sprint 4 (Son Aşama): Birleşik AI endpoint'leri
+# global_risk_analysis, get_regional_alerts, update_model
+from app.routes import ai_sprint4
 
 # Sprint 4: Week 3 route'larını içe aktar
 from app.routes import risk_v2, multimodal, digital_twin, leaf_detection
@@ -241,6 +250,10 @@ app.include_router(model_updates.router)
 
 # Sprint 4: External Dataset Management
 app.include_router(dataset.router)
+
+# Sprint 4 (Son Aşama): Birleşik AI endpoint'leri
+# Prefix: /api/v4 — global_risk_analysis, get_regional_alerts, update_model
+app.include_router(ai_sprint4.router)
 
 
 # =============================================================================

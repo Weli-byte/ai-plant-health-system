@@ -93,6 +93,21 @@ class ModelStore:
         self.multimodal_store:  Optional[object] = None   # MultimodalModelStore
         self.sprint3_loaded: bool = False
 
+        # ------------------------------------------------------------------
+        # Sprint 4 (Son Aşama) Model Referansları
+        #
+        # global_gnn_store   : GNN tabanlı küresel hastalık yayılım modeli.
+        #                      Bölgesel risk haritası (Eren'in frontend'i) için.
+        # continual_learning : Continual Learning servis singleton'ı.
+        #                      /update_model endpoint'i tarafından kullanılır.
+        #
+        # Her iki bileşen de kendi servis modülündeki Singleton nesnelerinden
+        # referans alınır; burada ikinci kez yükleme yapılmaz.
+        # ------------------------------------------------------------------
+        self.sprint4_gnn_store:        Optional[object] = None  # GlobalGNNModelStore
+        self.sprint4_retraining_svc:   Optional[object] = None  # RetrainingService
+        self.sprint4_loaded: bool = False
+
     # ------------------------------------------------------------------
     # YOLOv8 Yükleme
     # ------------------------------------------------------------------
@@ -309,6 +324,9 @@ class ModelStore:
         # Sprint 3 model referanslarını bağla (bağımsız try-except bloklar ile)
         self._load_sprint3_models()
 
+        # Sprint 4 model referanslarını bağla
+        self._load_sprint4_models()
+
     def _load_sprint3_models(self) -> None:
         """
         Sprint 3 modellerini yükler veya referanslarını alır.
@@ -355,6 +373,46 @@ class ModelStore:
         self.sprint3_loaded = True
         logger.info("✅ Sprint 3 model referansları bağlandı.")
 
+    def _load_sprint4_models(self) -> None:
+        """
+        Sprint 4 (Son Aşama) model singleton referanslarını alır.
+
+        GNN modeli (GlobalGNNModelStore) ve Continual Learning servisi
+        (RetrainingService) kendi modüllerinde zaten lifespan'de başlatılmış
+        olabilir. Bu metod yalnızca referansları alır; ikinci kez yükleme
+        yapmaz.
+
+        Her alt-blok bağımsız try-except ile korunur:
+        Biri başarısız olsa diğerleri ve önceki sprint modelleri etkilenmez.
+        """
+        logger.info("📦 Sprint 4 model referansları bağlanıyor...")
+
+        # ── GNN Küresel Risk Modeli ──────────────────────────────────────────
+        try:
+            from app.services.global_risk_service import global_gnn_store
+            self.sprint4_gnn_store = global_gnn_store
+            logger.info(
+                "✅ Sprint 4 GNN: GlobalGNNModelStore referansı alındı (yüklü=%s).",
+                global_gnn_store.is_loaded,
+            )
+        except Exception as exc:
+            logger.warning("⚠️  Sprint 4 GNN referansı alınamadı: %s", exc)
+
+        # ── Continual Learning Servisi ───────────────────────────────────────
+        try:
+            from app.services.retraining_service import retraining_service
+            self.sprint4_retraining_svc = retraining_service
+            logger.info(
+                "✅ Sprint 4 Continual Learning: RetrainingService referansı alındı."
+            )
+        except Exception as exc:
+            logger.warning(
+                "⚠️  Sprint 4 Continual Learning referansı alınamadı: %s", exc
+            )
+
+        self.sprint4_loaded = True
+        logger.info("✅ Sprint 4 model referansları bağlandı.")
+
     def unload_all(self) -> None:
         """
         Tüm modelleri bellekten temizler.
@@ -372,6 +430,11 @@ class ModelStore:
         self.lstm_twin_store   = None
         self.multimodal_store  = None
         self.sprint3_loaded    = False
+
+        # Sprint 4 referanslarını sıfırla
+        self.sprint4_gnn_store       = None
+        self.sprint4_retraining_svc  = None
+        self.sprint4_loaded          = False
 
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
