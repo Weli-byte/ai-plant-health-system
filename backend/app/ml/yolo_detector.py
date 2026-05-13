@@ -37,13 +37,17 @@ class YOLODetector:
 
         # Path varlığını kontrol et
         if not YOLO_MODEL_PATH.exists():
-            logger.warning(f"⚠️ YOLO model file not found at: {YOLO_MODEL_PATH}")
-            self._model = None
+            logger.warning(f"⚠️ YOLO model file not found at: {YOLO_MODEL_PATH}. Falling back to yolov8n.pt (detection).")
+            try:
+                self._model = YOLO("yolov8n.pt")  # Base detection model — NOT cls
+                logger.info("✅ YOLOv8 base detection model (yolov8n.pt) loaded as fallback.")
+            except Exception as exc:
+                logger.error(f"❌ YOLOv8 fallback also failed: {exc}")
+                self._model = None
             return
 
         try:
             logger.info(f"⏳ Loading YOLOv8 model from {YOLO_MODEL_PATH}...")
-            # weights_only=False (ultralytics load safe default)
             self._model = YOLO(str(YOLO_MODEL_PATH))
             logger.info("✅ YOLOv8 model loaded successfully.")
         except Exception as exc:
@@ -80,16 +84,16 @@ class YOLODetector:
 
         if len(results) > 0:
             result = results[0]
-            for box in result.boxes:
-                # Koordinatları al [x1, y1, x2, y2]
-                coords = box.xyxy[0].tolist()
-                conf = float(box.conf[0])
-                cls_id = int(box.cls[0])
-                cls_name = result.names[cls_id]
+            if hasattr(result, "boxes") and result.boxes is not None:
+                for box in result.boxes:
+                    coords = box.xyxy[0].tolist()
+                    conf = float(box.conf[0])
+                    cls_id = int(box.cls[0])
+                    cls_name = result.names[cls_id]
 
-                output["boxes"].append(coords)
-                output["scores"].append(conf)
-                output["classes"].append(cls_name)
+                    output["boxes"].append(coords)
+                    output["scores"].append(conf)
+                    output["classes"].append(cls_name)
 
         return output
 

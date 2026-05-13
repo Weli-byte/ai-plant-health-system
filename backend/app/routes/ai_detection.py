@@ -33,6 +33,7 @@ from app.core.model_manager import model_store
 # Pydantic yanıt şemaları
 from app.schemas.ai_schemas import (
     AIErrorResponse,
+    BoundingBox,
     ChatRequest,
     ChatResponse,
     DiseaseClassificationRequest,
@@ -44,6 +45,14 @@ from app.schemas.ai_schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _to_bounding_box(bb) -> "BoundingBox | None":
+    """Convert [x1,y1,x2,y2] list from service layer to Pydantic BoundingBox."""
+    if bb is None:
+        return None
+    return BoundingBox(x1=int(bb[0]), y1=int(bb[1]), x2=int(bb[2]), y2=int(bb[3]))
+
 
 # Router tanımı — prefix /ai, tüm endpoint'ler bu prefix altında
 router = APIRouter(
@@ -161,7 +170,7 @@ async def detect_leaf_endpoint(
     return LeafDetectionResponse(
         success=True,
         leaf_detected=leaf_detected,
-        bounding_box=result["bounding_box"],
+        bounding_box=_to_bounding_box(result["bounding_box"]),
         confidence=result["confidence"],
         cropped_leaf_base64=result["cropped_leaf_base64"],
         original_width=result["original_width"],
@@ -372,17 +381,37 @@ async def analyze_endpoint(
             yolo_model=model_store.yolo,
             confidence_threshold=0.25,
         )
-    except (ValueError, RuntimeError) as exc:
-        logger.error(f"Analyze - YOLO hatası: {exc}")
+    except ValueError as exc:
+        # Görsel çözümleme hatası — geçersiz dosya
+        logger.warning(f"Analyze - geçersiz görsel: {exc}")
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Yaprak tespiti başarısız: {exc}"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+    except Exception as exc:
+        # Beklenmeyen hata — pipeline'ı kırmak yerine kısmi yanıt döndür
+        logger.error(f"Analyze - YOLO hatası, kısmi yanıt dönülüyor: {exc}")
+        return FullAnalysisResponse(
+            success=False,
+            leaf_detection=LeafDetectionResponse(
+                success=False,
+                leaf_detected=False,
+                bounding_box=None,
+                confidence=0.0,
+                cropped_leaf_base64=None,
+                original_width=0,
+                original_height=0,
+                message="Yaprak tespiti geçici olarak kullanılamıyor.",
+            ),
+            disease_classification=None,
+            gradcam=None,
+            message="Yaprak tespiti başarısız. Lütfen farklı bir görsel deneyin.",
         )
 
     leaf_response = LeafDetectionResponse(
         success=True,
         leaf_detected=yolo_result["leaf_detected"],
-        bounding_box=yolo_result["bounding_box"],
+        bounding_box=_to_bounding_box(yolo_result["bounding_box"]),
         confidence=yolo_result["confidence"],
         cropped_leaf_base64=yolo_result["cropped_leaf_base64"],
         original_width=yolo_result["original_width"],
@@ -390,18 +419,19 @@ async def analyze_endpoint(
         message=(
             "Yaprak tespit edildi."
             if yolo_result["leaf_detected"]
-            else "Yaprak tespit edilemedi."
+            else "Yaprak tespit edilemedi, tüm görsel analiz ediliyor."
         ),
     )
 
-    # Yaprak bulunamadıysa pipeline'ı burada durdur
-    if not yolo_result["leaf_detected"] or yolo_result["cropped_leaf_base64"] is None:
+    # Service katmanı her zaman cropped_leaf_base64 döndürür (full-image fallback).
+    # Yalnızca gerçekten None ise (beklenmez) pipeline'ı durdur.
+    if yolo_result["cropped_leaf_base64"] is None:
         return FullAnalysisResponse(
             success=True,
             leaf_detection=leaf_response,
             disease_classification=None,
             gradcam=None,
-            message="Görselde yaprak tespit edilemedi. Hastalık analizi yapılamadı.",
+            message="Görsel işlenemedi. Hastalık analizi yapılamadı.",
         )
 
     cropped_b64 = yolo_result["cropped_leaf_base64"]
@@ -536,13 +566,82 @@ async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
             "Yapraklarda delikler varsa böcekleri, beyaz veya kahverengi lekeler varsa mantarı şüphelenebilirsiniz. "
             "Kesin bir tanı için uygulamanın 'Yeni Analiz Başlat' kısmından yaprağın fotoğrafını yükleyin."
         )
-    elif any(k in msg for k in ["bitki", "nedir"]):
+    elif any(k in msg for k in ["domates", "tomato"]):
         response = (
-            "Bitkiler ekosistemin temel yapı taşlarıdır. Güneş ışığı, su ve topraktaki besinleri kullanarak "
-            "fotosentez yaparlar ve büyürler. Onlara ne kadar iyi bakarsanız, o kadar verim alırsınız."
+            "Domates yetiştiriciliğinde en sık karşılaşılan sorunlar külleme, erken yanıklık (Alternaria) ve "
+            "kuzey yanıklığı (Septoria)dır. Düzenli sulama ve yeterli havalandırma kritiktir. "
+            "Meyve döneminde Potasyum (K) ağırlıklı gübre uygulayın. Sararmış alt yaprakları erken kırpın."
         )
-    elif "merhaba" in msg or "selam" in msg or "naber" in msg:
-        response = "Merhaba! Ben Tarla Asistanın. Bitkileriniz, hastalıklar, sulama veya ekim hakkında aklınıza takılan her şeyi bana sorabilirsiniz. Nasıl yardımcı olabilirim?"
+    elif any(k in msg for k in ["biber", "pepper", "patlıcan", "aubergine"]):
+        response = (
+            "Biber ve patlıcan, sıcaklığa çok duyarlı bitkilerdir. 15°C'nin altında büyüme durur. "
+            "Kök çürüklüğü (Phytophthora) riskine karşı aşırı sulamadan kaçının. "
+            "Yaprak biti saldırısı için doğal neem yağı spreyi etkili bir çözümdür."
+        )
+    elif any(k in msg for k in ["patates", "potato"]):
+        response = (
+            "Patateste en tehlikeli hastalık geç yanıklıktır (Phytophthora infestans). Yağmurlu ve nemli "
+            "havalarda bakırlı fungisit uygulayın. Yumru oluşum döneminde eşit sulama yapın; "
+            "ani kuraklık ardından yağmur, içi boş yumruya neden olabilir."
+        )
+    elif any(k in msg for k in ["sarı", "sararma", "sararmış", "yellow"]):
+        response = (
+            "Yaprak sararmalarının birden fazla nedeni olabilir: Azot (N) eksikliği, aşırı sulama, "
+            "kök çürüklüğü veya viral enfeksiyon. Alt yapraklar sarıyorsa azot eksikliği; "
+            "tüm yapraklar aynı anda sarıyorsa kök sorunu düşünün. "
+            "Görsel yüklersek kesin tanı koyabilirim."
+        )
+    elif any(k in msg for k in ["kuru", "kuruma", "solar", "solma", "solgun"]):
+        response = (
+            "Yaprakların solması genellikle yetersiz sulama, kök çürüklüğü veya vasküler hastalık belirtisidir. "
+            "Önce toprağı kontrol edin: Toprak nemli ama bitki solgunsa kök boğazında çürüme olabilir. "
+            "Gövde kesitinde kahverengi damarlar varsa Fusarium veya Verticillium wilti'nden şüphelenin."
+        )
+    elif any(k in msg for k in ["mantar", "fungus", "küf", "çürük", "leke"]):
+        response = (
+            "Mantari hastalıklar genellikle yüksek nem ve yetersiz hava sirkülasyonu ortamında gelişir. "
+            "Bakır veya kükürt bazlı fungisitler geniş spektrumlu koruma sağlar. "
+            "İlaçlamayı sabah erken veya akşam yapın; öğle güneşinde uygulama yaprak yanıklığına yol açabilir. "
+            "Hastalıklı bitki artıklarını tarlada bırakmayın."
+        )
+    elif any(k in msg for k in ["ilaç", "ilaçlama", "sprey", "fungisit", "pestisit", "zirai mücadele"]):
+        response = (
+            "İlaçlama yaparken etken maddeyi döngüsel değiştirin (direnç gelişimini önler). "
+            "Yaprak altlarına da ulaşacak şekilde spreyi her iki yüzeyden uygulayın. "
+            "İlaçlama sonrası hasat için bekleme süresine (antidot süresi) mutlaka uyun. "
+            "Rüzgarlı veya yağmur beklenen günlerde ilaçlama yapmayın."
+        )
+    elif any(k in msg for k in ["sıcaklık", "hava", "iklim", "don", "soğuk", "sıcak", "kuraklık"]):
+        response = (
+            "Hava koşulları bitki sağlığını doğrudan etkiler. Don riski olan gecelerde hassas bitkileri "
+            "tülle örtün. 35°C üzeri sıcaklıklarda gölgeleme yapın ve sabah sulayın. "
+            "Kuraklık dönemlerinde mulç (saman veya örtü) kullanmak toprak nemini %30 koruyabilir."
+        )
+    elif any(k in msg for k in ["verim", "mahsul", "hasat", "üretim", "ürün"]):
+        response = (
+            "Verim artırmak için dört temel: doğru çeşit seçimi, dengeli gübreleme, düzenli sulama ve "
+            "zamanında hastalık kontrolü. Çiçeklenme öncesi Fosfor (P) verimi doğrudan artırır. "
+            "Aşırı azot ise fazla yeşil aksama neden olarak meyve verimini düşürebilir."
+        )
+    elif any(k in msg for k in ["toprak", "ph", "kireç", "kalsiyum", "magnezyum", "asit"]):
+        response = (
+            "Çoğu sebze için ideal toprak pH'ı 6.0–7.0 arasındadır. Asit topraklar (pH<6) için kireç, "
+            "alkali topraklar (pH>7.5) için kükürt uygulayın. Magnezyum eksikliği yaprak damarları "
+            "yeşil kalırken arası sararan 'klorozis' görünümü verir; MgSO4 (Epsom tuzu) ile giderin."
+        )
+    elif any(k in msg for k in ["bitki", "nedir", "ne ekmeliyim", "hangi bitki", "öneri"]):
+        response = (
+            "Hangi bitkiyi yetiştireceğinize karar verirken bölgenizin iklimini, toprağınızı ve "
+            "pazar talebini göz önüne alın. İlkbaharda domates, biber, patlıcan; "
+            "yazın mısır ve kabak; sonbaharda ıspanak, lahana ve havuç iyi seçeneklerdir. "
+            "Daha spesifik öneri için bölgenizi ve ekim tarihini belirtebilir misiniz?"
+        )
+    elif "merhaba" in msg or "selam" in msg or "naber" in msg or "hey" in msg:
+        response = (
+            "Merhaba! Ben Tarla Asistanın. Bitkileriniz, hastalıklar, sulama, gübreleme veya "
+            "ekim hakkında her şeyi sorabilirsiniz. Fotoğraf yükleyerek analiz de yaptırabilirsiniz. "
+            "Nasıl yardımcı olabilirim?"
+        )
     else:
         fallbacks = [
             "Bu durum için kesin bir şey söylemek zor. En doğru bilgiyi verebilmem için bitkinizin bir fotoğrafını 'Tahlil' kısmından yüklemenizi öneririm. Genel olarak bitkinizin havalandırmasını artırmak ve nem dengesini korumak faydalıdır.",

@@ -44,9 +44,9 @@ def detect_leaf(
     if model_to_use is None:
         if not yolo_detector.is_loaded:
             yolo_detector.load_model()
-            if not yolo_detector.is_loaded:
-                raise FileNotFoundError("YOLO model not found in models/yolov8_leaf.pt")
         model_to_use = yolo_detector._model
+        if model_to_use is None:
+            logger.warning("YOLO model unavailable — full image fallback will be used.")
 
     # 2. Source Preparation
     try:
@@ -69,19 +69,19 @@ def detect_leaf(
         raise ValueError(f"Invalid image format: {exc}")
 
     # 3. Inference
-    try:
-        raw_results = model_to_use.predict(cv2_img, conf=confidence_threshold, verbose=False)
-        # Parse results similar to yolo_detector.detect
-        parsed_results = {"boxes": [], "scores": [], "classes": []}
-        if len(raw_results) > 0:
-            result = raw_results[0]
-            for box in result.boxes:
-                parsed_results["boxes"].append(box.xyxy[0].tolist())
-                parsed_results["scores"].append(float(box.conf[0]))
-                parsed_results["classes"].append(result.names[int(box.cls[0])])
-    except Exception as exc:
-        logger.error(f"YOLO detection error: {exc}")
-        raise RuntimeError(f"Model inference failed: {exc}")
+    parsed_results = {"boxes": [], "scores": [], "classes": []}
+    if model_to_use is not None:
+        try:
+            raw_results = model_to_use.predict(cv2_img, conf=confidence_threshold, verbose=False)
+            if len(raw_results) > 0:
+                result = raw_results[0]
+                if hasattr(result, "boxes") and result.boxes is not None:
+                    for box in result.boxes:
+                        parsed_results["boxes"].append(box.xyxy[0].tolist())
+                        parsed_results["scores"].append(float(box.conf[0]))
+                        parsed_results["classes"].append(result.names[int(box.cls[0])])
+        except Exception as exc:
+            logger.error(f"YOLO detection error: {exc}. Falling back to full image.")
 
     # 4. Process Results (Sprint 2 format: Single Best Detection)
     leaf_detected = len(parsed_results["boxes"]) > 0

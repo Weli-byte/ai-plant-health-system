@@ -164,8 +164,8 @@ class ModelStore:
         """
         if not model_path.exists():
             logger.warning(f"EfficientNet custom model {model_path} not found. Falling back to base EfficientNet.")
-            from torchvision import models
-            self.efficientnet = models.efficientnet_b3(pretrained=True)
+            from torchvision.models import efficientnet_b3, EfficientNet_B3_Weights
+            self.efficientnet = efficientnet_b3(weights=EfficientNet_B3_Weights.DEFAULT)
             self.efficientnet.to(self.device)
             self.efficientnet.eval()
             self.gradcam_target_layer = self._find_gradcam_layer(self.efficientnet)
