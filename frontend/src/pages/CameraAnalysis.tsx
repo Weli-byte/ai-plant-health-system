@@ -22,6 +22,7 @@ export default function CameraAnalysis() {
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
 
   const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeError, setAnalyzeError] = useState<string | null>(null);
 
   // ---------------------------------------------------------------------------
   // Kamera başlat (yalnızca kullanıcı istediğinde)
@@ -143,12 +144,14 @@ export default function CameraAnalysis() {
   const handleAnalyze = async () => {
     if (!capturedFile) return;
     setAnalyzing(true);
+    setAnalyzeError(null);
     try {
       const resultData = await aiApi.analyze(capturedFile);
       navigate("/results", { state: { image: capturedImage, resultData } });
     } catch (err) {
-      console.error("Analiz hatası:", err);
-      alert("Analiz yapılamadı. Sunucu bağlantısını kontrol edin.");
+      const msg = err instanceof Error ? err.message : "Bilinmeyen hata";
+      console.error("Analiz hatası:", msg);
+      setAnalyzeError(msg);
     } finally {
       setAnalyzing(false);
     }
@@ -194,6 +197,13 @@ export default function CameraAnalysis() {
             </>
           )}
         </Button>
+
+        {analyzeError && (
+          <div className="rounded-2xl bg-red-50 border border-red-200 p-3 text-sm text-red-800">
+            <p className="font-semibold mb-0.5">Analiz başarısız</p>
+            <p className="text-xs">{analyzeError}</p>
+          </div>
+        )}
 
         <button
           onClick={reset}

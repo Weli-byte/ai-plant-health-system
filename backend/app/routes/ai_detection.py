@@ -413,19 +413,31 @@ Kural:
 
 
 async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
-    """EfficientNet modeli yokken OpenAI Vision API ile fotoğrafı analiz et."""
-    if not settings.OPENAI_API_KEY:
+    """OpenAI Vision API (gpt-4o-mini) ile fotoğrafı analiz et."""
+    import os as _os
+
+    # Hem settings singleton hem de doğrudan env'den oku (dotenv zamanlama sorunu için)
+    api_key = settings.OPENAI_API_KEY or _os.getenv("OPENAI_API_KEY", "")
+
+    print(f"[Vision] OPENAI_API_KEY mevcut mu: {bool(api_key)}", flush=True)
+    print(f"[Vision] Görsel boyutu: {len(image_bytes)} bytes", flush=True)
+
+    if not api_key:
+        logger.error("[Vision] OPENAI_API_KEY bulunamadı — backend/.env kontrol edin.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=(
-                "AI modelleri yüklenmedi ve OpenAI API anahtarı eksik. "
-                "backend/.env dosyasına OPENAI_API_KEY ekleyin."
+                "OPENAI_API_KEY bulunamadı. "
+                "backend/.env dosyasına OPENAI_API_KEY=sk-... satırını ekleyin "
+                "ve backend'i yeniden başlatın."
             ),
         )
 
     mime = _detect_mime_type(image_bytes)
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
-    async_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+    print(f"[Vision] gpt-4o-mini'ye gönderiliyor (mime={mime})...", flush=True)
+
+    async_client = AsyncOpenAI(api_key=api_key)
 
     try:
         result = await asyncio.wait_for(
@@ -443,48 +455,64 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
                     ],
                 }],
             ),
-            timeout=40.0,
+            timeout=45.0,
         )
+        print("[Vision] Yanıt alındı!", flush=True)
     except asyncio.TimeoutError:
+        print("[Vision] HATA: Timeout (45s)", flush=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AI analizi zaman aşımına uğradı. Lütfen tekrar deneyin.",
+            detail="AI analizi zaman aşımına uğradı (45 saniye). Lütfen tekrar deneyin.",
         )
-    except openai.AuthenticationError:
+    except openai.AuthenticationError as exc:
+        print(f"[Vision] HATA: Authentication — {exc}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OpenAI API anahtarı geçersiz.",
+            detail=f"OpenAI API anahtarı geçersiz. .env dosyasındaki OPENAI_API_KEY'i kontrol edin. ({exc})",
         )
-    except openai.RateLimitError:
+    except openai.RateLimitError as exc:
+        print(f"[Vision] HATA: Rate limit — {exc}", flush=True)
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Şu an yoğunluk var, birkaç saniye bekleyip tekrar deneyin.",
+            detail="OpenAI rate limit aşıldı. Birkaç saniye bekleyip tekrar deneyin.",
         )
     except Exception as exc:
-        logger.error(f"Vision API hatası: {exc}")
+        print(f"[Vision] HATA: {type(exc).__name__}: {exc}", flush=True)
+        logger.error(f"[Vision] Beklenmeyen hata: {exc}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Fotoğraf analiz edilemedi. Lütfen tekrar deneyin.",
+            detail=f"Vision API hatası: {type(exc).__name__}: {exc}",
         )
 
     raw = (result.choices[0].message.content or "").strip()
-    # GPT bazen ```json ... ``` bloğu içinde döndürür — çıkar
-    if raw.startswith("```"):
+    print(f"[Vision] Ham yanıt ({len(raw)} karakter): {raw[:200]}", flush=True)
+
+    # JSON bloğunu çıkar — GPT bazen ```json ... ``` içinde döndürür
+    # Birden fazla ``` bloğu varsa ilkini al
+    if "```" in raw:
         parts = raw.split("```")
-        raw = parts[1] if len(parts) > 1 else raw
-        if raw.startswith("json"):
-            raw = raw[4:]
-        raw = raw.strip()
+        # parts[0]=öncesi, parts[1]=blok içi, parts[2]=sonrası
+        inner = parts[1] if len(parts) > 1 else raw
+        if inner.startswith("json"):
+            inner = inner[4:]
+        raw = inner.strip()
+    # Bazen sadece { ile başlar ama önünde açıklama metni olabilir
+    brace_start = raw.find("{")
+    brace_end = raw.rfind("}")
+    if brace_start != -1 and brace_end != -1 and brace_start < brace_end:
+        raw = raw[brace_start:brace_end + 1]
 
     try:
         data = json_module.loads(raw)
-    except (json_module.JSONDecodeError, ValueError):
-        logger.warning(f"Vision API JSON parse hatası. Ham yanıt: {raw[:300]}")
+        print(f"[Vision] JSON parse başarılı. Hastalık: {data.get('disease_name_tr')}", flush=True)
+    except (json_module.JSONDecodeError, ValueError) as exc:
+        print(f"[Vision] HATA: JSON parse — {exc}. Ham: {raw[:300]}", flush=True)
+        logger.warning(f"[Vision] JSON parse hatası: {exc}. Ham yanıt: {raw[:300]}")
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
-                "Fotoğraf analiz edildi ancak hastalık tespit edilemedi. "
-                "Daha iyi ışıkta, yaprağa yakından çekilmiş fotoğraf deneyin."
+                "Fotoğraf analiz edildi ancak yanıt işlenemedi. "
+                "Daha iyi aydınlatılmış, yaprağa yakından çekilmiş bir fotoğraf deneyin."
             ),
         )
 
@@ -863,168 +891,45 @@ async def analyze_endpoint(
     [Tüm sonuçlar tek yanıtta döndürülür]
     ```
 
-    **Not:** Yaprak tespit edilemezse `disease_classification` ve `gradcam` alanları `null` olur.
-    Modeller yüklü değilse OpenAI Vision API fallback otomatik devreye girer.
+    **Not:** Görsel doğrudan OpenAI Vision API ile analiz edilir.
+    Eğitilmiş ML model dosyaları olmadan da çalışır.
     """
-    # --- Adım 1: Görseli oku ---
+    # --- Görseli oku ---
     try:
         image_bytes = await file.read()
         if not image_bytes:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Yüklenen dosya boş."
+                detail="Yüklenen dosya boş.",
             )
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Dosya okunamadı: {exc}"
+            detail=f"Dosya okunamadı: {exc}",
         )
 
-    # --- Fallback: Modeller yoksa Vision API kullan ---
-    if not model_store.is_loaded:
-        logger.info("ML modelleri yüklenmemiş — Vision API fallback devreye giriyor.")
-        return await _analyze_with_vision(image_bytes)
+    print(f"[Analyze] Görsel alındı: {len(image_bytes)} bytes, content_type={file.content_type}", flush=True)
 
-    # --- Adım 2: YOLOv8 Yaprak Tespiti ---
-    try:
-        yolo_result = detect_leaf(
-            image_bytes=image_bytes,
-            yolo_model=model_store.yolo,
-            confidence_threshold=0.25,
-        )
-    except ValueError as exc:
-        # Görsel çözümleme hatası — geçersiz dosya
-        logger.warning(f"Analyze - geçersiz görsel: {exc}")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        )
-    except Exception as exc:
-        # Beklenmeyen hata — pipeline'ı kırmak yerine kısmi yanıt döndür
-        logger.error(f"Analyze - YOLO hatası, kısmi yanıt dönülüyor: {exc}")
-        return FullAnalysisResponse(
-            success=False,
-            leaf_detection=LeafDetectionResponse(
-                success=False,
-                leaf_detected=False,
-                bounding_box=None,
-                confidence=0.0,
-                cropped_leaf_base64=None,
-                original_width=0,
-                original_height=0,
-                message="Yaprak tespiti geçici olarak kullanılamıyor.",
-            ),
-            disease_classification=None,
-            gradcam=None,
-            message="Yaprak tespiti başarısız. Lütfen farklı bir görsel deneyin.",
-        )
+    # Her zaman Vision API kullan
+    return await _analyze_with_vision(image_bytes)
+# =============================================================================
+# Endpoint: GET /ai/status  — Konfigürasyon Kontrolü
+# =============================================================================
 
-    leaf_response = LeafDetectionResponse(
-        success=True,
-        leaf_detected=yolo_result["leaf_detected"],
-        bounding_box=_to_bounding_box(yolo_result["bounding_box"]),
-        confidence=yolo_result["confidence"],
-        cropped_leaf_base64=yolo_result["cropped_leaf_base64"],
-        original_width=yolo_result["original_width"],
-        original_height=yolo_result["original_height"],
-        message=(
-            "Yaprak tespit edildi."
-            if yolo_result["leaf_detected"]
-            else "Yaprak tespit edilemedi, tüm görsel analiz ediliyor."
-        ),
-    )
+@router.get("/status", summary="API konfigürasyonunu kontrol et")
+async def ai_status_endpoint():
+    import os as _os
+    api_key = settings.OPENAI_API_KEY or _os.getenv("OPENAI_API_KEY", "")
+    return {
+        "openai_api_key_set": bool(api_key),
+        "openai_api_key_prefix": api_key[:7] + "..." if len(api_key) > 7 else "(boş)",
+        "models_loaded": model_store.is_loaded,
+        "vision_api_ready": bool(api_key),
+    }
 
-    # Service katmanı her zaman cropped_leaf_base64 döndürür (full-image fallback).
-    # Yalnızca gerçekten None ise (beklenmez) pipeline'ı durdur.
-    if yolo_result["cropped_leaf_base64"] is None:
-        return FullAnalysisResponse(
-            success=True,
-            leaf_detection=leaf_response,
-            disease_classification=None,
-            gradcam=None,
-            message="Görsel işlenemedi. Hastalık analizi yapılamadı.",
-        )
 
-    cropped_b64 = yolo_result["cropped_leaf_base64"]
-
-    # --- Adım 3: EfficientNet Hastalık Sınıflandırma ---
-    disease_response = None
-    target_class_idx = None
-
-    try:
-        clf_result = classify_disease(
-            cropped_leaf_base64=cropped_b64,
-            efficientnet_model=model_store.efficientnet,
-            class_names=model_store.class_names,
-            device=model_store.device,
-        )
-        disease_response = DiseaseClassificationResponse(
-            success=True,
-            predicted_class=clf_result["predicted_class"],
-            predicted_class_index=clf_result["predicted_class_index"],
-            confidence=clf_result["confidence"],
-            all_scores=clf_result["all_scores"],
-            message=(
-                f"'{clf_result['predicted_class']}' hastalığı "
-                f"%{clf_result['confidence'] * 100:.1f} güven ile tespit edildi."
-            ),
-        )
-        target_class_idx = clf_result["predicted_class_index"]
-
-    except Exception as exc:
-        # Sınıflandırma başarısız olsa bile Grad-CAM'i tamamen atlamak yerine
-        # partially başarılı yanıt döndür.
-        logger.error(f"Analyze - EfficientNet hatası: {exc}")
-
-    # --- Adım 4: Grad-CAM Açıklanabilirlik ---
-    gradcam_response = None
-
-    if target_class_idx is not None:
-        try:
-            gcam_result = generate_gradcam(
-                cropped_leaf_base64=cropped_b64,
-                efficientnet_model=model_store.efficientnet,
-                target_layer=model_store.gradcam_target_layer,
-                class_names=model_store.class_names,
-                device=model_store.device,
-                target_class_index=target_class_idx,
-            )
-            gradcam_response = GradCAMResponse(
-                success=True,
-                heatmap_base64=gcam_result["heatmap_base64"],
-                overlay_base64=gcam_result["overlay_base64"],
-                target_class=gcam_result["target_class"],
-                target_class_index=gcam_result["target_class_index"],
-                message=(
-                    f"'{gcam_result['target_class']}' için Grad-CAM oluşturuldu."
-                ),
-            )
-        except Exception as exc:
-            logger.error(f"Analyze - Grad-CAM hatası: {exc}")
-            # Grad-CAM başarısız olsa bile diğer sonuçları döndür
-
-    # --- Adım 5: Hastalık Zenginleştirme ---
-    enrichment = None
-    if disease_response is not None:
-        enrichment = _get_disease_enrichment(disease_response.predicted_class)
-
-    # --- Adım 6: Birleşik Yanıt ---
-    final_message = "Tam AI analizi tamamlandı."
-    if disease_response is None:
-        final_message = "Yaprak tespit edildi fakat hastalık sınıflandırması başarısız oldu."
-    elif gradcam_response is None:
-        final_message = "Yaprak ve hastalık tespit edildi fakat Grad-CAM oluşturulamadı."
-
-    return FullAnalysisResponse(
-        success=True,
-        leaf_detection=leaf_response,
-        disease_classification=disease_response,
-        gradcam=gradcam_response,
-        disease_enrichment=enrichment,
-        message=final_message,
-    )
 # =============================================================================
 # Sistem Prompt — Zirai Asistan Kişiliği
 #
