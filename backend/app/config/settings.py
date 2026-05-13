@@ -52,11 +52,16 @@ class Settings:
     SECRET_KEY: str = os.getenv("SECRET_KEY", "supersecret-change-me-in-production")
 
     # CORS Ayarları (Frontend ile iletişim için)
+    # Hem localhost hem 127.0.0.1 varyantları eklendi:
+    # Windows'ta bazı tarayıcılar localhost yerine 127.0.0.1 kullanır;
+    # ikisi ayrı origin sayılır ve her ikisi de izin listesinde olmalıdır.
     ALLOWED_ORIGINS: list = [
-        "http://localhost:3000",   # React/Next.js geliştirme sunucusu
-        "http://localhost:5173",   # Vite geliştirme sunucusu
-        "http://localhost:8080",   # Vite (Port 8080 kullananlar için)
-        "http://127.0.0.1:8000",  # FastAPI kendi sunucusu
+        "http://localhost:3000",    # React/Next.js
+        "http://localhost:5173",    # Vite varsayılan
+        "http://localhost:8080",    # Vite (bu proje)
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "http://127.0.0.1:8080",   # Windows IPv4 çözümlemesi için kritik
     ]
 
     # External Dataset Ayarları

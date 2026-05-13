@@ -153,23 +153,21 @@ async def lifespan(app: FastAPI):
             "   AI endpoint'leri devre dışı. Diğer endpoint'ler çalışmaya devam eder."
         )
 
-    # Sprint 4: Week 3 modellerini yükle (her biri bağımsız, hata verirse 503 döner)
-    risk_v2_store.load()
-    multimodal_store.load()
-    digital_twin_store.load()
-    yolo_detector.load_model()
-
-    # Sprint 4: Week 1 — Global GNN model
-    global_gnn_store.load()
-
-    # Sprint 4: Continual Learning — load replay buffer
-    retraining_service.initialize()
-
-    # Sprint 4: Regional Analytics — load mock dataset
-    analytics_service.initialize()
-
-    # Sprint 4: MLOps Infrastructure
-    model_update_service.initialize()
+    # Sprint 4: Week 3 modellerini yükle (her biri bağımsız try/except ile korunur)
+    for name, fn in [
+        ("risk_v2_store",        risk_v2_store.load),
+        ("multimodal_store",     multimodal_store.load),
+        ("digital_twin_store",   digital_twin_store.load),
+        ("yolo_detector",        yolo_detector.load_model),
+        ("global_gnn_store",     global_gnn_store.load),
+        ("retraining_service",   retraining_service.initialize),
+        ("analytics_service",    analytics_service.initialize),
+        ("model_update_service", model_update_service.initialize),
+    ]:
+        try:
+            fn()
+        except Exception as exc:
+            logger.warning("⚠️  %s başlatılamadı (ilgili endpoint'ler 503 döner): %s", name, exc)
 
     # ──── UYGULAMA ÇALIŞIYOR ─────────────────────────────────────────────────
     yield  # Bu noktada uygulama istekleri karşılar
