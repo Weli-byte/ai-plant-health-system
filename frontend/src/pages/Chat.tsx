@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Send, Sparkles, Sprout, Sun, Droplets, Wheat } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { aiApi } from "@/services/api";
+import { aiApi, ChatHistoryMessage } from "@/services/api";
 
 type Msg = {
   id: number;
@@ -36,13 +36,21 @@ export default function Chat() {
   const send = async (text: string) => {
     if (!text.trim()) return;
 
+    // Konuşma geçmişini Anthropic formatına çevir:
+    // - messages[0] ilk AI selamlama mesajıdır, atlanır (Anthropic "user" ile başlamalı).
+    // - "ai" rolü "assistant" olarak eşlenir.
+    const history: ChatHistoryMessage[] = messages.slice(1).map((m) => ({
+      role: m.role === "user" ? "user" : "assistant",
+      content: m.content,
+    }));
+
     const userMsg: Msg = { id: Date.now(), role: "user", content: text };
     setMessages((m) => [...m, userMsg]);
     setInput("");
     setThinking(true);
 
     try {
-      const data = await aiApi.chat(text);
+      const data = await aiApi.chat(text, history);
       setMessages((m) => [...m, { id: Date.now() + 1, role: "ai", content: data.response }]);
     } catch (error) {
       console.error("Chat API hatası:", error);

@@ -227,9 +227,18 @@ class FullAnalysisResponse(BaseModel):
 # Endpoint: /ai/chat (Zirai Asistan)
 # ---------------------------------------------------------------------------
 
+class ChatMessage(BaseModel):
+    """Konuşma geçmişindeki tek bir mesaj."""
+    role: str = Field(..., description="'user' veya 'assistant'")
+    content: str = Field(..., description="Mesaj içeriği.")
+
 class ChatRequest(BaseModel):
     """Chat asistanı için kullanıcı mesajını içeren şema."""
     message: str = Field(..., description="Kullanıcının sorduğu zirai soru.")
+    history: list[ChatMessage] = Field(
+        default_factory=list,
+        description="Önceki konuşma mesajları (Anthropic messages formatında)."
+    )
 
 class ChatResponse(BaseModel):
     """Chat asistanından dönen yanıt şeması."""

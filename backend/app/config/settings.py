@@ -71,6 +71,9 @@ class Settings:
         r"http://(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?"
     )
 
+    # Anthropic Claude API
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
+
     # External Dataset Ayarları
     DATASET_PATH: str = os.getenv("DATASET_PATH", "")
 

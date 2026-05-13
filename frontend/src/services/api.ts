@@ -106,6 +106,11 @@ export interface FullAnalysisResult {
   message: string;
 }
 
+export interface ChatHistoryMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface ChatResponse {
   success: boolean;
   response: string;
@@ -230,8 +235,8 @@ export const aiApi = {
     formData.append("file", file);
     return requestFormData<FullAnalysisResult>("/ai/analyze", formData);
   },
-  chat: (message: string) =>
-    request<ChatResponse>("/ai/chat", { method: "POST", body: JSON.stringify({ message }) }),
+  chat: (message: string, history: ChatHistoryMessage[] = []) =>
+    request<ChatResponse>("/ai/chat", { method: "POST", body: JSON.stringify({ message, history }) }),
 };
 
 // ---------------------------------------------------------------------------

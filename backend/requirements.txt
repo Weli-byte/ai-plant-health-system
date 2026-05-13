@@ -45,3 +45,6 @@ scikit-learn>=1.4.0        # Pipeline, ColumnTransformer, preprocessing, metrics
 pandas>=2.1.0              # DataFrame construction for sklearn Pipeline
 joblib>=1.3.0              # Model serialization (replaces raw pickle for large numpy arrays)
 
+# ── AI Chatbot: Anthropic Claude LLM ─────────────────────────────────────────
+anthropic>=0.40.0          # Anthropic Python SDK — Claude API çağrıları için
+
