@@ -17,6 +17,8 @@
 # =============================================================================
 
 import asyncio
+import base64
+import json as json_module
 import logging
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -358,6 +360,209 @@ def _get_disease_enrichment(predicted_class: str) -> "DiseaseEnrichment | None":
     return DiseaseEnrichment(**data)
 
 
+def _detect_mime_type(image_bytes: bytes) -> str:
+    if image_bytes[:2] == b"\xff\xd8":
+        return "image/jpeg"
+    if image_bytes[:4] == b"\x89PNG":
+        return "image/png"
+    if len(image_bytes) > 12 and image_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    return "image/jpeg"
+
+
+_VISION_PROMPT = """\
+Bu yaprak fotoğrafını dikkatli biçimde analiz et.
+Yalnızca aşağıdaki JSON nesnesini döndür — başka hiçbir şey yazma:
+{
+  "disease_name_tr": "hastalık adı Türkçe",
+  "disease_name_en": "disease name English",
+  "confidence_score": 85,
+  "risk_level": 3,
+  "current_stage": "Evre 2 - Orta",
+  "spread_risk": "high",
+  "spread_speed": "fast",
+  "description": "2-3 cümle hastalık açıklaması",
+  "pathogen_type": "fungal",
+  "affected_parts": ["yaprak", "gövde"],
+  "estimated_timeline": "7-14 gün içinde yayılma riski",
+  "treatment_products": [
+    {
+      "name": "ürün adı",
+      "active_ingredient": "etken madde",
+      "dose": "2 ml/L",
+      "timing": "sabah erken",
+      "frequency": "7 günde bir",
+      "price_range_tl": "150-200 TL"
+    }
+  ],
+  "cultural_measures": ["enfekte yaprakları toplayın", "sulamayı azaltın"],
+  "prognosis_with_treatment": "7 günde iyileşme beklenir",
+  "prognosis_without_treatment": "14 günde tüm bitkiye yayılır",
+  "harvest_impact": "hasat 10 gün gecikebilir",
+  "next_season_prevention": "dayanıklı çeşit kullanın"
+}
+
+Kural:
+- pathogen_type: fungal | bacterial | viral | pest | none
+- spread_risk: low | medium | high
+- spread_speed: slow | medium | fast | none
+- risk_level: 1=sağlıklı, 2=takip et, 3=dikkat, 4=yüksek risk, 5=acil müdahale
+- confidence_score: 0-100 arası tam sayı
+- Bitki sağlıklıysa risk_level=1, is_healthy alanı ekleyebilirsin ama zorunlu değil.\
+"""
+
+
+async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
+    """EfficientNet modeli yokken OpenAI Vision API ile fotoğrafı analiz et."""
+    if not settings.OPENAI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "AI modelleri yüklenmedi ve OpenAI API anahtarı eksik. "
+                "backend/.env dosyasına OPENAI_API_KEY ekleyin."
+            ),
+        )
+
+    mime = _detect_mime_type(image_bytes)
+    b64_image = base64.b64encode(image_bytes).decode("utf-8")
+    async_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
+
+    try:
+        result = await asyncio.wait_for(
+            async_client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=1500,
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": f"data:{mime};base64,{b64_image}"},
+                        },
+                        {"type": "text", "text": _VISION_PROMPT},
+                    ],
+                }],
+            ),
+            timeout=40.0,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI analizi zaman aşımına uğradı. Lütfen tekrar deneyin.",
+        )
+    except openai.AuthenticationError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="OpenAI API anahtarı geçersiz.",
+        )
+    except openai.RateLimitError:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Şu an yoğunluk var, birkaç saniye bekleyip tekrar deneyin.",
+        )
+    except Exception as exc:
+        logger.error(f"Vision API hatası: {exc}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Fotoğraf analiz edilemedi. Lütfen tekrar deneyin.",
+        )
+
+    raw = (result.choices[0].message.content or "").strip()
+    # GPT bazen ```json ... ``` bloğu içinde döndürür — çıkar
+    if raw.startswith("```"):
+        parts = raw.split("```")
+        raw = parts[1] if len(parts) > 1 else raw
+        if raw.startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        data = json_module.loads(raw)
+    except (json_module.JSONDecodeError, ValueError):
+        logger.warning(f"Vision API JSON parse hatası. Ham yanıt: {raw[:300]}")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=(
+                "Fotoğraf analiz edildi ancak hastalık tespit edilemedi. "
+                "Daha iyi ışıkta, yaprağa yakından çekilmiş fotoğraf deneyin."
+            ),
+        )
+
+    # confidence_score: API 0-100 döndürür → 0.0-1.0'a çevir
+    confidence_raw = float(data.get("confidence_score", 80))
+    confidence = confidence_raw / 100.0 if confidence_raw > 1.0 else confidence_raw
+    confidence = max(0.0, min(1.0, confidence))
+
+    disease_name_en = data.get("disease_name_en", "Unknown")
+    disease_name_tr = data.get("disease_name_tr", "Bilinmiyor")
+    risk_level = max(1, min(5, int(data.get("risk_level", 3))))
+
+    treatment_products: list[TreatmentProduct] = []
+    for p in data.get("treatment_products", []):
+        try:
+            treatment_products.append(TreatmentProduct(
+                name=str(p.get("name", "")),
+                active_ingredient=str(p.get("active_ingredient", "")),
+                dose=str(p.get("dose", "")),
+                timing=str(p.get("timing", "")),
+                frequency=str(p.get("frequency", "")),
+                price_range_tl=str(p.get("price_range_tl", "")),
+            ))
+        except Exception:
+            pass
+
+    enrichment = DiseaseEnrichment(
+        disease_name_tr=disease_name_tr,
+        disease_name_en=disease_name_en,
+        description=str(data.get("description", "")),
+        pathogen_type=str(data.get("pathogen_type", "none")),
+        spread_speed=str(data.get("spread_speed", "none")),
+        affected_parts=[str(p) for p in data.get("affected_parts", [])],
+        risk_level=risk_level,
+        current_stage=str(data.get("current_stage", "")),
+        spread_risk=str(data.get("spread_risk", "low")),
+        estimated_timeline=str(data.get("estimated_timeline", "")),
+        treatment_products=treatment_products,
+        cultural_measures=[str(m) for m in data.get("cultural_measures", [])],
+        prognosis_with_treatment=str(data.get("prognosis_with_treatment", "")),
+        prognosis_without_treatment=str(data.get("prognosis_without_treatment", "")),
+        harvest_impact=str(data.get("harvest_impact", "")),
+        next_season_prevention=str(data.get("next_season_prevention", "")),
+    )
+
+    leaf_resp = LeafDetectionResponse(
+        success=True,
+        leaf_detected=True,
+        bounding_box=None,
+        confidence=confidence,
+        cropped_leaf_base64=None,
+        original_width=0,
+        original_height=0,
+        message="Yaprak tespit edildi (Vision AI).",
+    )
+
+    disease_resp = DiseaseClassificationResponse(
+        success=True,
+        predicted_class=disease_name_en,
+        predicted_class_index=0,
+        confidence=confidence,
+        all_scores={disease_name_en: confidence},
+        message=(
+            f"'{disease_name_tr}' hastalığı %{int(confidence * 100)} güven ile "
+            "tespit edildi (Vision AI)."
+        ),
+    )
+
+    return FullAnalysisResponse(
+        success=True,
+        leaf_detection=leaf_resp,
+        disease_classification=disease_resp,
+        gradcam=None,
+        disease_enrichment=enrichment,
+        message="Vision AI analizi tamamlandı.",
+    )
+
+
 # Router tanımı — prefix /ai, tüm endpoint'ler bu prefix altında
 router = APIRouter(
     prefix="/ai",
@@ -659,9 +864,8 @@ async def analyze_endpoint(
     ```
 
     **Not:** Yaprak tespit edilemezse `disease_classification` ve `gradcam` alanları `null` olur.
+    Modeller yüklü değilse OpenAI Vision API fallback otomatik devreye girer.
     """
-    _require_models_loaded()
-
     # --- Adım 1: Görseli oku ---
     try:
         image_bytes = await file.read()
@@ -677,6 +881,11 @@ async def analyze_endpoint(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Dosya okunamadı: {exc}"
         )
+
+    # --- Fallback: Modeller yoksa Vision API kullan ---
+    if not model_store.is_loaded:
+        logger.info("ML modelleri yüklenmemiş — Vision API fallback devreye giriyor.")
+        return await _analyze_with_vision(image_bytes)
 
     # --- Adım 2: YOLOv8 Yaprak Tespiti ---
     try:
