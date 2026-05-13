@@ -1,153 +1,176 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Search, Filter, Leaf, Loader2 } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { plantsApi, diseaseRecordsApi, type Plant, type DiseaseRecord } from "@/services/api";
+import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { Leaf, Loader2, Microscope, RefreshCw } from "lucide-react";
+import { analysisRecordsApi, type AnalysisRecord } from "@/services/api";
+import { getUser } from "@/lib/auth";
 
-interface HistoryItem {
-  id: string;
-  plant: string;
-  disease: string;
-  confidence: number;
-  when: string;
-  tone: "ok" | "warn" | "bad";
+const RISK_BADGE: Record<number, { label: string; color: string; icon: string }> = {
+  1: { label: "Sağlıklı", color: "bg-green-100 text-green-700", icon: "bg-green-200/70" },
+  2: { label: "Takip Et", color: "bg-blue-100 text-blue-700", icon: "bg-blue-200/70" },
+  3: { label: "Dikkat", color: "bg-amber-100 text-amber-800", icon: "bg-amber-200/70" },
+  4: { label: "Yüksek Risk", color: "bg-orange-100 text-orange-800", icon: "bg-orange-200/70" },
+  5: { label: "Acil Müdahale", color: "bg-red-100 text-red-700", icon: "bg-red-200/70" },
+};
+
+function formatDate(dateStr: string): string {
+  const d = new Date(dateStr);
+  return d.toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" })
+    + ", " + d.toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" });
 }
 
-const toneMap = {
-  ok: "bg-success/15 text-success",
-  warn: "bg-warning/15 text-warning",
-  bad: "bg-destructive/15 text-destructive",
-} as const;
-
 export default function AnalysisHistory() {
-  const [items, setItems] = useState<HistoryItem[]>([]);
+  const navigate = useNavigate();
+  const [analyses, setAnalyses] = useState<AnalysisRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [q, setQ] = useState("");
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  const user = getUser();
 
-  const loadHistory = async () => {
+  const load = useCallback(async () => {
+    if (!user?.email) { setLoading(false); return; }
     setLoading(true);
+    setError(null);
     try {
-      const userPlants = await plantsApi.getByUser(1);
-      const allItems: HistoryItem[] = [];
-
-      for (const plant of userPlants) {
-        try {
-          const records = await diseaseRecordsApi.getByPlant(plant.id);
-          records.forEach((r) => {
-            allItems.push({
-              id: `a-${r.id}`,
-              plant: plant.plant_name.split(" - ")[0],
-              disease: r.disease_name,
-              confidence: r.confidence_score ? Math.round(r.confidence_score * 100) : 0,
-              when: formatTimeAgo(r.created_at),
-              tone: getTone(r.disease_name, r.confidence_score),
-            });
-          });
-        } catch {
-          // Kayıt olmayabilir
-        }
-      }
-
-      // Tarihe göre sırala (en yeniler önce)
-      allItems.sort((a, b) => {
-        // id'deki numaraya göre (a-5 > a-1)
-        const idA = parseInt(a.id.split("-")[1]);
-        const idB = parseInt(b.id.split("-")[1]);
-        return idB - idA;
-      });
-
-      setItems(allItems);
+      const data = await analysisRecordsApi.getByEmail(user.email);
+      setAnalyses(data);
     } catch (err) {
-      console.error("Geçmiş yükleme hatası:", err);
+      console.error("Analiz geçmişi yükleme hatası:", err);
+      setError("Analizler yüklenemedi. Sunucu bağlantısını kontrol edin.");
     } finally {
       setLoading(false);
     }
+  }, [user?.email]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const handleViewDetail = (a: AnalysisRecord) => {
+    let enrichment = null;
+    if (a.enrichment_json) {
+      try { enrichment = JSON.parse(a.enrichment_json); } catch { /* ignore */ }
+    }
+    const resultData = {
+      success: true,
+      leaf_detection: {
+        success: true, leaf_detected: true, bounding_box: null,
+        confidence: a.confidence_score, cropped_leaf_base64: null,
+        original_width: 0, original_height: 0, message: "Vision AI",
+      },
+      disease_classification: {
+        success: true,
+        predicted_class: a.disease_name_en ?? a.disease_name_tr,
+        predicted_class_index: 0,
+        confidence: a.confidence_score ?? 0,
+        all_scores: {},
+        message: "",
+      },
+      gradcam: null,
+      disease_enrichment: enrichment,
+      message: "Kayıtlı analiz",
+    };
+    navigate("/results", { state: { resultData } });
   };
 
-  const filtered = items.filter(
-    (i) =>
-      i.plant.toLowerCase().includes(q.toLowerCase()) ||
-      i.disease.toLowerCase().includes(q.toLowerCase())
-  );
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        <span className="ml-2 text-sm text-muted-foreground">Analizler yükleniyor...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-3 animate-fade-in">
+        <div className="rounded-2xl bg-red-50 border border-red-200 p-4 text-sm text-red-800">{error}</div>
+        <button
+          onClick={load}
+          className="w-full rounded-2xl border border-border/60 py-3 text-sm font-semibold hover:bg-muted/40 transition"
+        >
+          Tekrar Dene
+        </button>
+      </div>
+    );
+  }
+
+  if (analyses.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 space-y-5 animate-fade-in">
+        <div className="flex h-24 w-24 items-center justify-center rounded-full bg-muted/50">
+          <Leaf className="h-12 w-12 text-muted-foreground/40" />
+        </div>
+        <div className="text-center space-y-1.5">
+          <p className="text-lg font-bold text-foreground">Henüz analiz yapmadınız</p>
+          <p className="text-sm text-muted-foreground">İlk tarla analizinizi yapın ve buraya kaydedin</p>
+        </div>
+        <button
+          onClick={() => navigate("/analyze")}
+          className="rounded-2xl bg-leaf-gradient px-8 py-3.5 text-sm font-bold text-primary-foreground shadow-soft active:scale-[0.98] transition"
+        >
+          İlk Analizi Başlat
+        </button>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Bitki veya hastalık ara"
-            className="h-11 rounded-2xl border-border/60 bg-card pl-9"
-          />
-        </div>
-        <button className="flex h-11 w-11 items-center justify-center rounded-2xl bg-card text-foreground shadow-card">
-          <Filter className="h-4 w-4" />
+    <div className="space-y-3 animate-fade-in">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">{analyses.length} analiz kaydı</p>
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition"
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          Yenile
         </button>
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          <span className="ml-2 text-sm text-muted-foreground">Geçmiş yükleniyor...</span>
-        </div>
-      )}
+      {analyses.map((a) => {
+        const badge = RISK_BADGE[a.risk_level ?? 3] ?? RISK_BADGE[3];
+        const confidencePct = a.confidence_score ? Math.round(a.confidence_score * 100) : 0;
 
-      {!loading && (
-        <div className="space-y-2">
-          {filtered.map((a) => (
-            <Link key={a.id} to={`/analysis/${a.id}`}>
-              <Card className="rounded-2xl border-border/60 transition hover:bg-accent/30">
-                <CardContent className="flex items-center gap-3 p-3">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-xl ${
-                      toneMap[a.tone]
-                    }`}
-                  >
-                    <Leaf className="h-4 w-4" />
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-foreground">
-                      {a.plant} · {a.disease}
-                    </p>
-                    <p className="text-[11px] text-muted-foreground">{a.when}</p>
-                  </div>
-                  <span className="text-xs font-semibold text-muted-foreground">
-                    %{a.confidence}
-                  </span>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-          {filtered.length === 0 && (
-            <p className="py-10 text-center text-sm text-muted-foreground">
-              Sonuç bulunamadı.
-            </p>
-          )}
-        </div>
-      )}
+        return (
+          <div
+            key={a.id}
+            className="rounded-3xl bg-card border border-border/60 shadow-card p-4 space-y-3"
+          >
+            {/* Başlık satırı */}
+            <div className="flex items-start gap-3">
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${badge.icon}`}>
+                <Microscope className="h-5 w-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-foreground leading-tight truncate">
+                  {a.disease_name_tr}
+                </p>
+                {a.disease_name_en && a.disease_name_en !== a.disease_name_tr && (
+                  <p className="text-xs text-muted-foreground italic truncate">{a.disease_name_en}</p>
+                )}
+              </div>
+              <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${badge.color}`}>
+                {badge.label}
+              </span>
+            </div>
+
+            {/* Meta bilgiler */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>{formatDate(a.created_at)}</span>
+              {confidencePct > 0 && (
+                <span className="font-bold text-foreground">%{confidencePct} güven</span>
+              )}
+            </div>
+
+            {/* Detay butonu */}
+            <button
+              onClick={() => handleViewDetail(a)}
+              className="w-full rounded-2xl bg-primary/8 border border-primary/20 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/15 active:scale-[0.98]"
+            >
+              Detayı Gör
+            </button>
+          </div>
+        );
+      })}
     </div>
   );
-}
-
-function getTone(disease: string, score: number | null): "ok" | "warn" | "bad" {
-  if (disease === "Sağlıklı" || disease === "Healthy") return "ok";
-  if (score && score > 0.85) return "bad";
-  return "warn";
-}
-
-function formatTimeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  if (hours < 1) return "Az önce";
-  if (hours < 24) return `${hours} saat önce`;
-  const days = Math.floor(hours / 24);
-  if (days === 1) return "Dün";
-  return `${days} gün önce`;
 }

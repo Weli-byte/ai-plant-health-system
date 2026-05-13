@@ -33,6 +33,7 @@ app.use(express.json({ limit: "50mb" }));
 let nextUserId = 4;
 let nextPlantId = 5;
 let nextRecordId = 6;
+let nextAnalysisId = 4;
 
 const users = [
   { id: 1, username: "mehmet_ciftci", email: "mehmet@tarla.com" },
@@ -41,10 +42,10 @@ const users = [
 ];
 
 const plants = [
-  { id: 1, plant_name: "Domates - 1. Sera", user_id: 1, created_at: "2026-03-15T10:00:00Z" },
-  { id: 2, plant_name: "Biber - Açık Alan", user_id: 1, created_at: "2026-03-20T08:30:00Z" },
-  { id: 3, plant_name: "Salatalık - 2. Sera", user_id: 1, created_at: "2026-04-01T14:00:00Z" },
-  { id: 4, plant_name: "Çilek - Bahçe", user_id: 2, created_at: "2026-04-10T09:00:00Z" },
+  { id: 1, plant_name: "🍅 Domates", user_id: 1, created_at: "2026-03-15T10:00:00Z", plant_type: "Domates", plant_emoji: "🍅", growth_stage: "fruiting", location: "1. Sera", irrigation_method: "drip", irrigation_frequency: "daily", area_size: 2.5, planting_date: "2026-03-01", notes: null },
+  { id: 2, plant_name: "🫑 Biber", user_id: 1, created_at: "2026-03-20T08:30:00Z", plant_type: "Biber", plant_emoji: "🫑", growth_stage: "flowering", location: "Açık Alan", irrigation_method: "furrow", irrigation_frequency: "every2days", area_size: 1.0, planting_date: "2026-03-15", notes: null },
+  { id: 3, plant_name: "🥒 Salatalık", user_id: 1, created_at: "2026-04-01T14:00:00Z", plant_type: "Salatalık", plant_emoji: "🥒", growth_stage: "vegetative", location: "2. Sera", irrigation_method: "drip", irrigation_frequency: "daily", area_size: 1.5, planting_date: "2026-03-25", notes: null },
+  { id: 4, plant_name: "🍓 Çilek", user_id: 2, created_at: "2026-04-10T09:00:00Z", plant_type: "Çilek", plant_emoji: "🍓", growth_stage: "harvest", location: "Bahçe", irrigation_method: "sprinkler", irrigation_frequency: "daily", area_size: 0.5, planting_date: "2026-02-20", notes: null },
 ];
 
 const diseaseRecords = [
@@ -53,6 +54,12 @@ const diseaseRecords = [
   { id: 3, plant_id: 2, disease_name: "Sağlıklı", confidence_score: 0.98, created_at: "2026-05-09T16:00:00Z" },
   { id: 4, plant_id: 3, disease_name: "Külleme", confidence_score: 0.88, created_at: "2026-05-07T10:15:00Z" },
   { id: 5, plant_id: 4, disease_name: "Sağlıklı", confidence_score: 0.96, created_at: "2026-05-06T12:45:00Z" },
+];
+
+const analysisRecords = [
+  { id: 1, user_email: "mehmet@tarla.com", disease_name_tr: "Külleme", disease_name_en: "Powdery Mildew", confidence_score: 0.87, risk_level: 3, pathogen_type: "fungal", spread_risk: "high", affected_percentage: 45, enrichment_json: null, created_at: "2026-05-10T14:30:00Z" },
+  { id: 2, user_email: "mehmet@tarla.com", disease_name_tr: "Sağlıklı Bitki", disease_name_en: "Healthy", confidence_score: 0.96, risk_level: 1, pathogen_type: "none", spread_risk: "low", affected_percentage: 0, enrichment_json: null, created_at: "2026-05-08T11:00:00Z" },
+  { id: 3, user_email: "mehmet@tarla.com", disease_name_tr: "Pas Hastalığı", disease_name_en: "Rust", confidence_score: 0.91, risk_level: 4, pathogen_type: "fungal", spread_risk: "high", affected_percentage: 60, enrichment_json: null, created_at: "2026-05-06T09:15:00Z" },
 ];
 
 // =============================================================================
@@ -120,7 +127,7 @@ app.get("/users/:id", (req, res) => {
 
 // POST /plants/ — Yeni bitki ekle
 app.post("/plants/", (req, res) => {
-  const { plant_name, user_id } = req.body;
+  const { plant_name, user_id, plant_type, plant_emoji, planting_date, location, growth_stage, irrigation_method, irrigation_frequency, area_size, notes } = req.body;
 
   if (!plant_name || !user_id) {
     return res.status(400).json({ detail: "plant_name ve user_id zorunludur." });
@@ -134,6 +141,15 @@ app.post("/plants/", (req, res) => {
     plant_name,
     user_id,
     created_at: new Date().toISOString(),
+    plant_type: plant_type ?? null,
+    plant_emoji: plant_emoji ?? null,
+    planting_date: planting_date ?? null,
+    location: location ?? null,
+    growth_stage: growth_stage ?? null,
+    irrigation_method: irrigation_method ?? null,
+    irrigation_frequency: irrigation_frequency ?? null,
+    area_size: area_size ?? null,
+    notes: notes ?? null,
   };
   plants.push(newPlant);
   console.log(`🌿 Yeni bitki: ${plant_name} (user: ${user_id})`);
@@ -194,6 +210,44 @@ app.get("/disease-records/plant/:plantId", (req, res) => {
 
   const records = diseaseRecords
     .filter((r) => r.plant_id === plantId)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  res.json(records);
+});
+
+// =============================================================================
+// 3b. ANALYSIS RECORDS (Sprint 3+)
+// =============================================================================
+
+// POST /analyses/ — Yeni analiz kaydı
+app.post("/analyses/", (req, res) => {
+  const { user_email, disease_name_tr, disease_name_en, confidence_score, risk_level, pathogen_type, spread_risk, affected_percentage, enrichment_json } = req.body;
+  if (!user_email || !disease_name_tr) {
+    return res.status(400).json({ detail: "user_email ve disease_name_tr zorunludur." });
+  }
+  const record = {
+    id: nextAnalysisId++,
+    user_email,
+    disease_name_tr,
+    disease_name_en: disease_name_en ?? null,
+    confidence_score: confidence_score ?? null,
+    risk_level: risk_level ?? null,
+    pathogen_type: pathogen_type ?? null,
+    spread_risk: spread_risk ?? null,
+    affected_percentage: affected_percentage ?? null,
+    enrichment_json: enrichment_json ?? null,
+    created_at: new Date().toISOString(),
+  };
+  analysisRecords.push(record);
+  console.log(`✅ Analiz kaydedildi: ${disease_name_tr} (${user_email})`);
+  res.status(201).json(record);
+});
+
+// GET /analyses/ — Kullanıcının analizleri (?email=...)
+app.get("/analyses/", (req, res) => {
+  const email = req.query.email;
+  if (!email) return res.status(400).json({ detail: "email query parametresi zorunludur." });
+  const records = analysisRecords
+    .filter((r) => r.user_email === email)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   res.json(records);
 });

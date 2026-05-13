@@ -5,7 +5,8 @@ import {
   RefreshCw, Leaf, Microscope, BarChart2, Pill,
   Sprout, TrendingUp, Zap, FlaskConical,
 } from 'lucide-react';
-import { diseaseRecordsApi, type DiseaseEnrichment, type FullAnalysisResult, type HotspotRegion } from '@/services/api';
+import { analysisRecordsApi, type DiseaseEnrichment, type FullAnalysisResult, type HotspotRegion } from '@/services/api';
+import { getUser } from '@/lib/auth';
 
 // ---------------------------------------------------------------------------
 // Sabitler
@@ -243,15 +244,23 @@ export default function Results() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await diseaseRecordsApi.create({
-        plant_id: 1,
-        disease_name: diseaseName,
-        confidence_score: diseaseInfo?.confidence ?? 0,
+      const user = getUser();
+      const email = user?.email ?? 'anonymous@user.com';
+      await analysisRecordsApi.create({
+        user_email: email,
+        disease_name_tr: diseaseName,
+        disease_name_en: diseaseNameEn || undefined,
+        confidence_score: diseaseInfo?.confidence ?? undefined,
+        risk_level: enrichment?.risk_level ?? undefined,
+        pathogen_type: enrichment?.pathogen_type ?? undefined,
+        spread_risk: enrichment?.spread_risk ?? undefined,
+        affected_percentage: enrichment?.affected_percentage ?? undefined,
+        enrichment_json: enrichment ? JSON.stringify(enrichment) : undefined,
       });
       setSaved(true);
     } catch (err) {
-      console.error('Kaydetme hatası:', err);
-      alert('Sonuç kaydedilemedi. Lütfen tekrar deneyin.');
+      console.error('[Kaydet] Hata:', err instanceof Error ? err.message : err);
+      alert(`Sonuç kaydedilemedi: ${err instanceof Error ? err.message : 'Bilinmeyen hata'}`);
     } finally {
       setSaving(false);
     }

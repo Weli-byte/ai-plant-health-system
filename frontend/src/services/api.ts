@@ -76,6 +76,29 @@ export interface Plant {
   plant_name: string;
   user_id: number;
   created_at: string;
+  plant_type: string | null;
+  plant_emoji: string | null;
+  planting_date: string | null;
+  location: string | null;
+  growth_stage: string | null;
+  irrigation_method: string | null;
+  irrigation_frequency: string | null;
+  area_size: number | null;
+  notes: string | null;
+}
+
+export interface AnalysisRecord {
+  id: number;
+  user_email: string;
+  disease_name_tr: string;
+  disease_name_en: string | null;
+  confidence_score: number | null;
+  risk_level: number | null;
+  pathogen_type: string | null;
+  spread_risk: string | null;
+  affected_percentage: number | null;
+  enrichment_json: string | null;
+  created_at: string;
 }
 
 export interface DiseaseRecord {
@@ -288,8 +311,40 @@ export const plantsApi = {
   getAll: () => request<Plant[]>("/plants/"),
   getById: (id: number) => request<Plant>(`/plants/${id}`),
   getByUser: (userId: number) => request<Plant[]>(`/plants/user/${userId}`),
-  create: (data: { plant_name: string; user_id: number }) =>
-    request<Plant>("/plants/", { method: "POST", body: JSON.stringify(data) }),
+  create: (data: {
+    plant_name: string;
+    user_id: number;
+    plant_type?: string;
+    plant_emoji?: string;
+    planting_date?: string;
+    location?: string;
+    growth_stage?: string;
+    irrigation_method?: string;
+    irrigation_frequency?: string;
+    area_size?: number;
+    notes?: string;
+  }) => request<Plant>("/plants/", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ---------------------------------------------------------------------------
+// Analysis Records API
+// ---------------------------------------------------------------------------
+
+export const analysisRecordsApi = {
+  create: (data: {
+    user_email: string;
+    disease_name_tr: string;
+    disease_name_en?: string;
+    confidence_score?: number;
+    risk_level?: number;
+    pathogen_type?: string;
+    spread_risk?: string;
+    affected_percentage?: number;
+    enrichment_json?: string;
+  }) => request<AnalysisRecord>("/analyses/", { method: "POST", body: JSON.stringify(data) }),
+
+  getByEmail: (email: string) =>
+    request<AnalysisRecord[]>(`/analyses/?email=${encodeURIComponent(email)}`),
 };
 
 // ---------------------------------------------------------------------------

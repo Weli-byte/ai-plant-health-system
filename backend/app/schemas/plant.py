@@ -1,43 +1,42 @@
 # =============================================================================
 # schemas/plant.py
-# Bu dosya Plant (bitki) modeli için Pydantic şemalarını tanımlar.
-# API isteklerinde veri doğrulama ve yanıt serileştirme için kullanılır.
 # =============================================================================
 
 from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import Optional
 
 
-# -----------------------------------------------------------------------------
-# PlantBase: Tüm Plant şemalarının paylaştığı ortak alanlar
-# -----------------------------------------------------------------------------
 class PlantBase(BaseModel):
-    plant_name: str = Field(
-        ...,
-        min_length=1,
-        max_length=100,
-        description="Bitkinin adı (örn: 'Domates', 'Elma Ağacı')"
-    )
+    plant_name: str = Field(..., min_length=1, max_length=100, description="Bitkinin tam adı")
 
 
-# -----------------------------------------------------------------------------
-# PlantCreate: Yeni bitki eklemek için kullanılır (POST /plants)
-# user_id route üzerinden veya authentication'dan gelecek, body'de alınmaz.
-# -----------------------------------------------------------------------------
 class PlantCreate(PlantBase):
-    user_id: int = Field(
-        ...,
-        description="Bitkinin sahibi olan kullanıcının ID'si"
-    )
+    user_id: int = Field(..., description="Bitkinin sahibi olan kullanıcının ID'si")
+    plant_type: Optional[str] = None
+    plant_emoji: Optional[str] = None
+    planting_date: Optional[str] = None
+    location: Optional[str] = None
+    growth_stage: Optional[str] = None
+    irrigation_method: Optional[str] = None
+    irrigation_frequency: Optional[str] = None
+    area_size: Optional[float] = None
+    notes: Optional[str] = None
 
 
-# -----------------------------------------------------------------------------
-# PlantResponse: API'den bitki verisi döndürülürken kullanılır (GET /plants)
-# -----------------------------------------------------------------------------
 class PlantResponse(PlantBase):
     id: int
     user_id: int
     created_at: datetime
+    plant_type: Optional[str] = None
+    plant_emoji: Optional[str] = None
+    planting_date: Optional[str] = None
+    location: Optional[str] = None
+    growth_stage: Optional[str] = None
+    irrigation_method: Optional[str] = None
+    irrigation_frequency: Optional[str] = None
+    area_size: Optional[float] = None
+    notes: Optional[str] = None
 
     class Config:
-        from_attributes = True  # SQLAlchemy nesnelerinden doğrudan okuma
+        from_attributes = True

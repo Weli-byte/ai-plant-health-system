@@ -35,10 +35,12 @@ import app.models.disease_record  # noqa: F401
 import app.models.regional_disease_data  # noqa: F401  → regional_disease_data tablosu
 import app.models.model_update_record    # noqa: F401  → model_updates tablosu
 import app.models.user_profile           # noqa: F401  → user_profiles tablosu
+import app.models.analysis_record        # noqa: F401  → analysis_records tablosu
 
 # Route'ları içe aktar
 from app.routes import users, plants, disease_records, ai_detection
 from app.routes import user_profiles
+from app.routes import analysis_records
 
 # Sprint 3: Tarım Karar Destek Sistemi route'larını içe aktar
 from app.routes import ai_sprint3
@@ -101,6 +103,30 @@ logger = logging.getLogger(__name__)
 # Tablo zaten varsa tekrar oluşturmaz (güvenli).
 # =============================================================================
 Base.metadata.create_all(bind=engine)
+
+# Mevcut DB için kolon migration (create_all eksik kolonları eklemez)
+try:
+    from sqlalchemy import text
+    _NEW_PLANT_COLS = [
+        ("plant_type", "VARCHAR(100)"),
+        ("plant_emoji", "VARCHAR(10)"),
+        ("planting_date", "VARCHAR(20)"),
+        ("location", "VARCHAR(200)"),
+        ("growth_stage", "VARCHAR(50)"),
+        ("irrigation_method", "VARCHAR(50)"),
+        ("irrigation_frequency", "VARCHAR(50)"),
+        ("area_size", "FLOAT"),
+        ("notes", "TEXT"),
+    ]
+    with engine.connect() as _conn:
+        for _col, _typ in _NEW_PLANT_COLS:
+            try:
+                _conn.execute(text(f"ALTER TABLE plants ADD COLUMN {_col} {_typ}"))
+                _conn.commit()
+            except Exception:
+                pass  # kolon zaten var
+except Exception as _mig_exc:
+    logger.warning("Plant kolon migration atlandı: %s", _mig_exc)
 
 
 # =============================================================================
@@ -236,6 +262,7 @@ app.include_router(users.router)
 app.include_router(user_profiles.router)
 app.include_router(plants.router)
 app.include_router(disease_records.router)
+app.include_router(analysis_records.router)
 app.include_router(ai_detection.router)   # Sprint 2: Gerçek AI endpoint'leri
 app.include_router(ai_sprint3.router)      # Sprint 3: Karar Destek Sistemi
 
