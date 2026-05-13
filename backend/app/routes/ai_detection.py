@@ -16,6 +16,7 @@
 #   - Her endpoint bağımsız çalışabilir (modüler akış).
 # =============================================================================
 
+import asyncio
 import logging
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
@@ -514,7 +515,20 @@ async def analyze_endpoint(
 # =============================================================================
 # Sistem Prompt — Zirai Asistan Kişiliği
 #
-AGRI_SYSTEM_PROMPT = """Sen Mehmet Hoca'sın — Ege ve Akdeniz bölgelerinde 25 yıl saha tecrübesi olan, sözünü sakınmayan bir ziraat mühendisisin. Çiftçilerle sohbet eder gibi sade, samimi ve doğrudan konuş. "Kök Neden:", "Çözüm Adımları:" gibi şablon başlıklar kullanma; bunun yerine akıcı bir sohbet diliyle yaz. Soruyla hemen ilgili konuya dal, gereksiz giriş cümlesi yazma. Somut ilaç adı, doz ve uygulama zamanı ver. Cevabının sonuna bir cümlelik önleyici bakım notu ekle. Cevaplarını 2-3 paragraf uzunluğunda tut."""
+AGRI_SYSTEM_PROMPT = """Sen Türkiye'nin önde gelen ziraat mühendislerinden Doç. Dr. Ahmet Yılmaz'sın. Çukurova Üniversitesi Ziraat Fakültesi mezunu, Ege ve Güneydoğu Anadolu'da 25 yıl saha çalışması var.
+
+KONUŞMA KURALLARI:
+- Kullanıcının sorusunu oku, tam olarak o konuya cevap ver
+- Soru sormadan önce elindeki bilgiyle cevap ver
+- Maksimum 3 paragraf, net ve uygulanabilir
+- Somut: ilaç adı, doz, zamanlama, fiyat aralığı ver
+- Türk çiftçisinin bulabileceği ürünleri öner (Tarkim, Bayer TR, Syngenta TR)
+- Mevsim ve bölgeye göre özelleştir
+- Doğal konuş, robotik başlıklar (Adım 1, Kök Neden) kullanma
+
+ÖRNEK DOĞRU CEVAP:
+Soru: "Sulamayı artırayım mı?"
+Cevap: "Bu sorunun cevabı bitkiye ve toprağa göre değişir, ama genel kural şu: toprak 5-10 cm derinlikte nemli kalmalı. Parmağınızı toprağa sokun, kuru geliyorsa sulama vakti. Yazın sıcak günlerde (35°C+) sabah 07:00 öncesi sulayın, öğlen sulaması yaprak yanmasına neden olur. Hangi bitkiyi yetiştiriyorsunuz, ona göre daha spesifik söyleyebilirim.\""""
 
 
 # =============================================================================
@@ -548,15 +562,24 @@ async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
     ]
     messages.append({"role": "user", "content": request.message})
 
+    async_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
     try:
-        client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        result = client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
-            system=AGRI_SYSTEM_PROMPT,
-            messages=messages,
+        result = await asyncio.wait_for(
+            async_client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=1000,
+                system=AGRI_SYSTEM_PROMPT,
+                messages=messages,
+            ),
+            timeout=25.0,
         )
         response_text = result.content[0].text
+    except asyncio.TimeoutError:
+        logger.warning("Anthropic API 25 saniye içinde yanıt vermedi.")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Şu an yoğunluk var, tekrar dener misiniz?",
+        )
     except anthropic.AuthenticationError:
         logger.error("Anthropic API kimlik doğrulama hatası — geçersiz API anahtarı.")
         raise HTTPException(
@@ -567,7 +590,7 @@ async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
         logger.warning("Anthropic API hız limiti aşıldı.")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="AI servisi şu an meşgul, lütfen kısa süre sonra tekrar deneyin.",
+            detail="Şu an yoğunluk var, tekrar dener misiniz?",
         )
     except Exception as exc:
         logger.error(f"Anthropic API hatası: {exc}")

@@ -24,6 +24,30 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function requestWithTimeout<T>(path: string, options: RequestInit, timeoutMs: number): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    return res.json() as Promise<T>;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Bağlantı zaman aşımına uğradı, tekrar gönderin");
+    }
+    throw err;
+  }
+}
+
 async function requestFormData<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
@@ -236,7 +260,11 @@ export const aiApi = {
     return requestFormData<FullAnalysisResult>("/ai/analyze", formData);
   },
   chat: (message: string, history: ChatHistoryMessage[] = []) =>
-    request<ChatResponse>("/ai/chat", { method: "POST", body: JSON.stringify({ message, history }) }),
+    requestWithTimeout<ChatResponse>(
+      "/ai/chat",
+      { method: "POST", body: JSON.stringify({ message, history }) },
+      30_000,
+    ),
 };
 
 // ---------------------------------------------------------------------------
