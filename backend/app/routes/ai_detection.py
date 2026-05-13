@@ -986,29 +986,37 @@ async def ai_chat_analyze_endpoint(
     detected_disease: str | None = None
     confidence_val: float | None = None
 
-    # --- YOLO + EfficientNet pipeline (model yoksa fallback) ---
-    if model_store.is_loaded:
-        try:
-            yolo_result = detect_leaf(
-                image_bytes=image_bytes,
-                yolo_model=model_store.yolo,
-                confidence_threshold=0.25,
-            )
-            cropped_b64 = yolo_result.get("cropped_leaf_base64")
+    # --- YOLO + EfficientNet pipeline ---
+    # detect_leaf() uses yolo_detector singleton internally (yolo_model=None → auto-loads).
+    # We attempt this regardless of model_store.is_loaded so that partial model states
+    # (e.g., YOLO loaded but EfficientNet not yet complete) still yield a useful response.
+    try:
+        yolo_result = detect_leaf(
+            image_bytes=image_bytes,
+            yolo_model=None,  # let detect_leaf use yolo_detector singleton
+            confidence_threshold=0.25,
+        )
+        cropped_b64 = yolo_result.get("cropped_leaf_base64")
+    except Exception as exc:
+        logger.error(f"chat-analyze YOLO aşaması hatası: {exc}")
+        cropped_b64 = None
 
-            if cropped_b64:
-                clf_result = classify_disease(
-                    cropped_leaf_base64=cropped_b64,
-                    efficientnet_model=model_store.efficientnet,
-                    class_names=model_store.class_names,
-                    device=model_store.device,
-                )
-                detected_disease = clf_result.get("predicted_class")
-                confidence_val = clf_result.get("confidence")
+    if cropped_b64 and model_store.efficientnet is not None:
+        try:
+            clf_result = classify_disease(
+                cropped_leaf_base64=cropped_b64,
+                efficientnet_model=model_store.efficientnet,
+                class_names=model_store.class_names,
+                device=model_store.device,
+            )
+            detected_disease = clf_result.get("predicted_class")
+            confidence_val = clf_result.get("confidence")
         except Exception as exc:
-            logger.warning(f"chat-analyze pipeline hatası (devam ediliyor): {exc}")
+            logger.error(f"chat-analyze EfficientNet aşaması hatası: {exc}")
+    elif cropped_b64 is None:
+        logger.warning("chat-analyze: görüntü ön-işleme başarısız, metinsel yanıt dönülüyor.")
     else:
-        logger.info("chat-analyze: modeller yüklü değil, metinsel yanıt dönülüyor.")
+        logger.info("chat-analyze: EfficientNet modeli yüklü değil, metinsel yanıt dönülüyor.")
 
     # --- Bağlamsal yanıt oluştur ---
     user_note = message.strip() if message.strip() else None
@@ -1055,22 +1063,26 @@ async def ai_chat_analyze_endpoint(
                 "Bu ek bilgiyi göz önünde bulundurarak öneri güncellemeleri için sohbete devam etmenizi öneririm."
             )
     else:
-        # Model yüklü değil veya tespit yapılamadı
+        # Görsel alındı ama hastalık tespit edilemedi (model eksik veya görsel işlenemedi)
         if user_note:
             response_text = (
-                f"Fotoğrafınızı aldım ancak otomatik analiz şu an tamamlanamadı. "
-                f"Notunuzu gördüm: '{user_note}'.\n\n"
-                "Yaprak üzerindeki belirtileri bana yazılı olarak tarif ederseniz "
-                "(renk, boyut, konumu, ne zaman başladığı) size zirai deneyimime dayanarak "
-                "detaylı tavsiye sunabilirim. Alternatif olarak backend'in tam çalışır hale "
-                "gelmesi beklenebilir ve tekrar yüklenebilir."
+                f"Fotoğrafınızı aldım, notunuzu da gördüm: '{user_note}'.\n\n"
+                "Fotoğrafı tam olarak değerlendiremedim — yaprak üzerindeki belirtileri "
+                "bana yazılı olarak tarif eder misiniz? "
+                "Şunları belirtirseniz çok daha doğru teşhis koyabilirim: "
+                "leke rengi ve şekli, etkilenen bölge (yaprak ucu mu, kenar mı, orta mı), "
+                "ne zamandan beri var, başka yapraklara yayıldı mı?\n\n"
+                "Hangi bitkiden bahsettiğinizi ve bölgenizi de paylaşırsanız, "
+                "mevsimsel risk faktörlerini de hesaba katarak öneri sunabilirim."
             )
         else:
             response_text = (
-                "Fotoğrafınızı aldım. Otomatik AI analizi şu an yapılamadı. "
-                "Lütfen yaprak üzerinde gördüğünüz belirtileri yazılı tarif edin: "
-                "renk değişimi mi, leke mi, kuruma mı, sararmış mı, küf mi? "
-                "Bu bilgilerle size doğru teşhis ve tedavi önereceğim."
+                "Fotoğrafınızı aldım, teşekkürler.\n\n"
+                "Yaprak üzerinde gördüğünüz belirtileri yazılı olarak tarif eder misiniz? "
+                "Şunları bilmek yeterli: leke rengi (sarı, kahve, siyah, beyaz?), "
+                "leke şekli (yuvarlak, düzensiz, halkalı?), etkilenen bölge, "
+                "ve bu belirtilerin ne kadar süredir var olduğu.\n\n"
+                "Bu bilgilerle hastalığı teşhis edip size adım adım tedavi planı sunabilirim."
             )
 
     return ChatResponse(
