@@ -2,9 +2,33 @@ import { FormEvent, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Leaf } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { loginMock } from "@/lib/auth";
+import { loginMock, setBackendUserId } from "@/lib/auth";
+import { usersApi } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+
+// ---------------------------------------------------------------------------
+// Backend kullanıcı senkronizasyonu (best-effort)
+// ---------------------------------------------------------------------------
+async function syncBackendUser(email: string, name: string): Promise<void> {
+  try {
+    const user = await usersApi.getByEmail(email);
+    setBackendUserId(user.id);
+  } catch {
+    // Kullanıcı yoksa oluştur
+    try {
+      const username = email.split("@")[0].replace(/[^a-zA-Z0-9_]/g, "_");
+      const created = await usersApi.create({
+        username: `${username}_${Date.now()}`.slice(0, 50),
+        email,
+        password: "defaultpass123",
+      });
+      setBackendUserId(created.id);
+    } catch {
+      // Backend çalışmıyor olabilir — localStorage auth yeterli
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -124,14 +148,15 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
     setTimeout(() => setForgotSent(false), 4000);
   };
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const errs: Errors = {};
     if (!email.trim()) errs.email = "E-posta adresi gerekli.";
     else if (!isValidEmail(email)) errs.email = "Geçerli bir e-posta adresi girin.";
     if (!password) errs.password = "Şifre gerekli.";
     if (Object.keys(errs).length) { setErrors(errs); return; }
-    loginMock(email.trim());
+    const user = loginMock(email.trim());
+    await syncBackendUser(email.trim(), user.name);
     onSuccess();
   };
 
@@ -139,9 +164,10 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
     <div className="space-y-4">
       <GoogleButton
         label="Google ile Giriş Yap"
-        onClick={() => {
+        onClick={async () => {
           console.log("[Auth] Google ile giriş — OAuth henüz entegre edilmedi.");
-          loginMock("google@demo.com", "Google Kullanıcısı");
+          const user = loginMock("google@demo.com", "Google Kullanıcısı");
+          await syncBackendUser("google@demo.com", user.name);
           onSuccess();
         }}
       />
@@ -216,7 +242,7 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
   const clear = (field: string) =>
     setErrors((prev) => ({ ...prev, [field]: "" }));
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     const errs: Errors = {};
     if (!name.trim()) errs.name = "Ad Soyad gerekli.";
@@ -228,6 +254,7 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
     if (!terms) errs.terms = "Devam etmek için koşulları kabul etmelisiniz.";
     if (Object.keys(errs).length) { setErrors(errs); return; }
     loginMock(email.trim(), name.trim());
+    await syncBackendUser(email.trim(), name.trim());
     onSuccess();
   };
 
@@ -235,9 +262,10 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
     <div className="space-y-4">
       <GoogleButton
         label="Google ile Kayıt Ol"
-        onClick={() => {
+        onClick={async () => {
           console.log("[Auth] Google ile kayıt — OAuth henüz entegre edilmedi.");
-          loginMock("google@demo.com", "Google Kullanıcısı");
+          const user = loginMock("google@demo.com", "Google Kullanıcısı");
+          await syncBackendUser("google@demo.com", user.name);
           onSuccess();
         }}
       />

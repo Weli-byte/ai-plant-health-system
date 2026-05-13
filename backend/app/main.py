@@ -33,9 +33,11 @@ import app.models.disease_record  # noqa: F401
 # Bu satırlar olmadan Base.metadata.create_all() bu tabloları oluşturmaz!
 import app.models.regional_disease_data  # noqa: F401  → regional_disease_data tablosu
 import app.models.model_update_record    # noqa: F401  → model_updates tablosu
+import app.models.user_profile           # noqa: F401  → user_profiles tablosu
 
 # Route'ları içe aktar
 from app.routes import users, plants, disease_records, ai_detection
+from app.routes import user_profiles
 
 # Sprint 3: Tarım Karar Destek Sistemi route'larını içe aktar
 from app.routes import ai_sprint3
@@ -223,6 +225,7 @@ app.add_middleware(
 # Her router kendi prefix'i ile çalışır (örn: /users, /plants, /ai)
 # =============================================================================
 app.include_router(users.router)
+app.include_router(user_profiles.router)
 app.include_router(plants.router)
 app.include_router(disease_records.router)
 app.include_router(ai_detection.router)   # Sprint 2: Gerçek AI endpoint'leri

@@ -159,8 +159,42 @@ export interface PlantFutureResponse {
 export const usersApi = {
   getAll: () => request<User[]>("/users/"),
   getById: (id: number) => request<User>(`/users/${id}`),
+  getByEmail: (email: string) => request<User>(`/users/by-email/${encodeURIComponent(email)}`),
   create: (data: { username: string; email: string; password: string }) =>
     request<User>("/users/", { method: "POST", body: JSON.stringify(data) }),
+};
+
+// ---------------------------------------------------------------------------
+// User Profile API
+// ---------------------------------------------------------------------------
+
+export interface UserProfileData {
+  id: number;
+  email: string;
+  full_name: string | null;
+  phone: string | null;
+  city: string | null;
+  district: string | null;
+  field_size: number | null;
+  crops: string[];
+}
+
+export const userProfileApi = {
+  get: (email: string) =>
+    request<UserProfileData>(`/user-profiles/${encodeURIComponent(email)}`),
+  upsert: (data: {
+    email: string;
+    full_name?: string;
+    phone?: string;
+    city?: string;
+    district?: string;
+    field_size?: number;
+    crops?: string[];
+  }) =>
+    request<UserProfileData>("/user-profiles/", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };
 
 // ---------------------------------------------------------------------------

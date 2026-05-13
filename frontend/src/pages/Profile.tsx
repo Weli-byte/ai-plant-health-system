@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { User, Leaf, LogOut, Settings, MapPin, Phone, Loader2 } from "lucide-react";
+import { User, Leaf, LogOut, MapPin, Phone, Settings, Loader2, Wheat } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { getUser, logout } from "@/lib/auth";
@@ -12,7 +12,7 @@ export default function Profile() {
 
   const [plantCount, setPlantCount] = useState(0);
   const [analysisCount, setAnalysisCount] = useState(0);
-  const [healthPct, setHealthPct] = useState(0);
+  const [healthPct, setHealthPct] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,13 +22,17 @@ export default function Profile() {
   const loadStats = async () => {
     setLoading(true);
     try {
-      const plants = await plantsApi.getByUser(1);
+      const backendUserId = user?.backendUserId;
+      if (!backendUserId) {
+        setLoading(false);
+        return;
+      }
+
+      const plants = await plantsApi.getByUser(backendUserId);
       setPlantCount(plants.length);
 
-      // Tüm hastalık kayıtlarını topla
       let totalRecords = 0;
       let healthyRecords = 0;
-
       for (const plant of plants) {
         try {
           const records = await diseaseRecordsApi.getByPlant(plant.id);
@@ -42,7 +46,7 @@ export default function Profile() {
       }
 
       setAnalysisCount(totalRecords);
-      setHealthPct(totalRecords > 0 ? Math.round((healthyRecords / totalRecords) * 100) : 0);
+      setHealthPct(totalRecords > 0 ? Math.round((healthyRecords / totalRecords) * 100) : null);
     } catch (err) {
       console.error("Profil istatistik hatası:", err);
     } finally {
@@ -52,6 +56,7 @@ export default function Profile() {
 
   return (
     <div className="space-y-4 animate-fade-in">
+      {/* Kullanıcı kartı */}
       <Card className="rounded-3xl border-border/60 shadow-card">
         <CardContent className="p-5 text-center">
           <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-leaf-gradient text-primary-foreground shadow-soft">
@@ -64,6 +69,7 @@ export default function Profile() {
         </CardContent>
       </Card>
 
+      {/* İstatistikler */}
       <div className="grid grid-cols-3 gap-2">
         {loading ? (
           <Card className="rounded-2xl border-border/60 col-span-3">
@@ -76,15 +82,32 @@ export default function Profile() {
           <>
             <StatCard label="Bitki" value={String(plantCount)} />
             <StatCard label="Analiz" value={String(analysisCount)} />
-            <StatCard label="Sağlık" value={`%${healthPct}`} />
+            <StatCard
+              label="Sağlık"
+              value={healthPct !== null ? `%${healthPct}` : "—"}
+            />
           </>
         )}
       </div>
 
+      {/* Profil detayları */}
       <div className="space-y-2">
-        <Row icon={Leaf} title="Tarlam" sub="Antalya, Serik" />
-        <Row icon={MapPin} title="Konum" sub="36.91° K, 31.10° D" />
-        <Row icon={Phone} title="İletişim" sub="+90 5•• ••• •• ••" />
+        {user?.city && (
+          <Row
+            icon={MapPin}
+            title="Konum"
+            sub={user.district ? `${user.city}, ${user.district}` : user.city}
+          />
+        )}
+        {user?.phone && (
+          <Row icon={Phone} title="Telefon" sub={user.phone} />
+        )}
+        {user?.fieldSize && (
+          <Row icon={Leaf} title="Tarla Büyüklüğü" sub={`${user.fieldSize} dönüm`} />
+        )}
+        {user?.crops && user.crops.length > 0 && (
+          <Row icon={Wheat} title="Ürünler" sub={user.crops.join(", ")} />
+        )}
         <Row icon={Settings} title="Ayarlar" sub="Bildirim, dil, gizlilik" />
       </div>
 
@@ -114,9 +137,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 }
 
 function Row({
-  icon: Icon,
-  title,
-  sub,
+  icon: Icon, title, sub,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;

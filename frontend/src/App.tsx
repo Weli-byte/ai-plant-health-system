@@ -6,7 +6,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { PhoneShell } from "@/components/PhoneShell";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
+import { RequireProfile } from "@/components/RequireProfile";
 import Login from "./pages/Login";
+import ProfileSetup from "./pages/ProfileSetup";
 import Index from "./pages/Index";
 import AnalysisResult from "./pages/AnalysisResult";
 import AnalysisHistory from "./pages/AnalysisHistory";
@@ -22,9 +24,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Oturum açık + profil tamamlanmış + AppShell chrome
 const Shell = ({ children }: { children: React.ReactNode }) => (
   <RequireAuth>
-    <AppShell>{children}</AppShell>
+    <RequireProfile>
+      <AppShell>{children}</AppShell>
+    </RequireProfile>
   </RequireAuth>
 );
 
@@ -37,6 +42,15 @@ const App = () => (
         <PhoneShell>
           <Routes>
             <Route path="/login" element={<Login />} />
+            {/* Profil tamamlama — oturum gerekli, AppShell yok */}
+            <Route
+              path="/profile-setup"
+              element={
+                <RequireAuth>
+                  <ProfileSetup />
+                </RequireAuth>
+              }
+            />
             <Route path="/" element={<Shell><Index /></Shell>} />
             <Route path="/history" element={<Shell><AnalysisHistory /></Shell>} />
             <Route path="/analysis/new" element={<Shell><CameraAnalysis /></Shell>} />

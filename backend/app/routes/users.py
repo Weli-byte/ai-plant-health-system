@@ -86,6 +86,22 @@ def get_all_users(db: Session = Depends(get_db)):
 
 
 @router.get(
+    "/by-email/{email}",
+    response_model=UserResponse,
+    summary="E-postaya göre kullanıcıyı getir"
+)
+def get_user_by_email(email: str, db: Session = Depends(get_db)):
+    """E-posta adresine göre tek bir kullanıcı döndürür."""
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Bu e-posta adresiyle kayıtlı kullanıcı bulunamadı."
+        )
+    return user
+
+
+@router.get(
     "/{user_id}",
     response_model=UserResponse,
     summary="Belirli bir kullanıcıyı getir"
