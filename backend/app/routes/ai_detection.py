@@ -48,9 +48,11 @@ from app.schemas.ai_schemas import (
     DiseaseClassificationRequest,
     DiseaseClassificationResponse,
     DiseaseEnrichment,
+    ExpertAnalysis,
     FullAnalysisResponse,
     GradCAMRequest,
     GradCAMResponse,
+    HotspotRegion,
     LeafDetectionResponse,
     TreatmentProduct,
 )
@@ -371,44 +373,70 @@ def _detect_mime_type(image_bytes: bytes) -> str:
 
 
 _VISION_PROMPT = """\
-Bu yaprak fotoğrafını dikkatli biçimde analiz et.
-Yalnızca aşağıdaki JSON nesnesini döndür — başka hiçbir şey yazma:
+Bu yaprak fotoğrafını bir ziraat fakültesi mezunu, 25 yıllık saha deneyimine sahip uzman ziraat mühendisi gözüyle analiz et.
+Tüm Türkçe metinleri uzman bilimsel dilde yaz — teknik terminoloji, latince tür adları, fizyopatolojik süreçler kullan.
+Yalnızca aşağıdaki JSON nesnesini döndür — başka hiçbir metin, açıklama veya markdown ekleme:
+
 {
-  "disease_name_tr": "hastalık adı Türkçe",
-  "disease_name_en": "disease name English",
-  "confidence_score": 85,
+  "disease_name_tr": "Külleme (Erysiphe spp.)",
+  "disease_name_en": "Powdery Mildew",
+  "confidence_score": 87,
   "risk_level": 3,
-  "current_stage": "Evre 2 - Orta",
+  "current_stage": "Evre 2 — Konidiofor oluşumu aktif",
   "spread_risk": "high",
   "spread_speed": "fast",
-  "description": "2-3 cümle hastalık açıklaması",
+  "description": "Erysiphe cichoracearum obligat bir ektoparazit olup yalnızca canlı bitki epidermal hücrelerinde koloni oluşturur. Yaprak yüzeyinde beyaz-gri konidiofor tabakası belirginleşmiş, aseksüel üreme döngüsü devrededir.",
   "pathogen_type": "fungal",
-  "affected_parts": ["yaprak", "gövde"],
-  "estimated_timeline": "7-14 gün içinde yayılma riski",
+  "affected_parts": ["Adaksial yaprak yüzeyi", "Sürgün uçları", "Çiçek taç yaprakları"],
+  "estimated_timeline": "Optimal koşullarda (20-25°C, %60-80 RH) 5-7 günde ikincil enfeksiyonlar gelişir",
+  "healthy_percentage": 35,
+  "affected_percentage": 65,
+  "severity_distribution": "Yaprak merkezi ve damar bölgelerinde yoğun sporlanma, kenarlara doğru azalıyor",
+  "hotspot_regions": [
+    {"x_percent": 45, "y_percent": 38, "radius_percent": 20, "intensity": 0.92, "label": "Primer konidiofor kolonisi"},
+    {"x_percent": 68, "y_percent": 62, "radius_percent": 13, "intensity": 0.65, "label": "İkincil enfeksiyon odağı"}
+  ],
   "treatment_products": [
     {
-      "name": "ürün adı",
-      "active_ingredient": "etken madde",
-      "dose": "2 ml/L",
-      "timing": "sabah erken",
-      "frequency": "7 günde bir",
-      "price_range_tl": "150-200 TL"
+      "name": "Thiovit Jet 80 WG",
+      "active_ingredient": "Kükürt (%80 WG)",
+      "dose": "200-300 g / 100 L su",
+      "timing": "Sabah 08:00 öncesi veya akşam serinliğinde",
+      "frequency": "7-10 günde bir, max 6 uygulama",
+      "price_range_tl": "150-250 TL/kg"
     }
   ],
-  "cultural_measures": ["enfekte yaprakları toplayın", "sulamayı azaltın"],
-  "prognosis_with_treatment": "7 günde iyileşme beklenir",
-  "prognosis_without_treatment": "14 günde tüm bitkiye yayılır",
-  "harvest_impact": "hasat 10 gün gecikebilir",
-  "next_season_prevention": "dayanıklı çeşit kullanın"
+  "cultural_measures": [
+    "Enfekte yaprak dokularını imha edin — kompost yapmayın",
+    "Bitki arası mesafeyi artırarak hava sirkülasyonunu iyileştirin"
+  ],
+  "prognosis_with_treatment": "Erken sistemik fungisit müdahalesi ile 10-14 günde sporlanma baskılanır",
+  "prognosis_without_treatment": "Sekonder enfeksiyonlar 7-10 günde tüm sürgünlere yayılır, klorofil sentezi bozulur",
+  "harvest_impact": "Erken müdahale ile kayıp %10 altında tutulabilir; geç müdahalede %30-50 verim ve kalite kaybı",
+  "next_season_prevention": "Hasat sonrası bitki artıklarını imha edin. İlkbahar başında kükürt bazlı koruyucu uygulama yapın",
+  "expert_analysis": {
+    "biology": "Erysiphe spp. obligat bir biyotrof parazit olup haustoria ile konakçı hücrelerden besin alır; aseksüel döngüde zincirleme konidiler (basionym: Oidium) rüzgarla yayılır, cinsel döngüde kleistotesyum içindeki askosporlar kışı geçirir.",
+    "spread_mechanism": "Primer inokulüm kleistotesyumlardan salınan askosporlardan kaynaklanır; sekonder yayılım konidia aracılığıyla rüzgar ve temasla gerçekleşir, kuru hava sporlara avantaj sağlar.",
+    "environmental_conditions": "20-27°C sıcaklık ve %50-80 bağıl nem optimum gelişim koşullarıdır; yüksek azot gübrelemesi ve gölge koşulları konakçı hassasiyetini artırır.",
+    "economic_impact": "Külleme, dünya genelinde tahıl ve sebzelerde yıllık %10-40 verim kaybına yol açar; Türkiye elma bahçelerinde tedavisiz vakalarda %50 pazar değeri kaybı bildirilmiştir.",
+    "diagnosis_certainty": "Tipik unlu beyaz misel örtüsü ve konidiofor morfolojisi göz önünde bulundurulduğunda teşhis %90+ güvenilirlikte; Botrytis cinerea ile erken aşama karışıklığı mümkün olup mikroskobik incelemeyle ayrılır.",
+    "similar_diseases": "Botrytis cinerea (gri küf): daha koyu, pamuksu görünüm; Phytophthora: alt yaprak yüzeyinde, ıslak dokularda; Eriofid akarları: gümüşi renk değişikliği ama misel yok.",
+    "treatment_protocol": "1) Hastalıklı sürgünleri kesin ve imha edin. 2) Kükürt bazlı koruyucu fungisit uygulayın (7 gün aralık). 3) Hastalık devam ederse DMI (triazol) grubu sistemik fungisit ile rotasyon yapın. 4) PHI sürelerine uyun.",
+    "organic_alternatives": "Süt serumu (%20 seyreltilmiş), sodyum bikarbonat çözeltisi (%0.5), Bacillus subtilis preparatları (Serenade), tatlı turunçgil yağ bazlı ürünler (Prev-Am) organik sertifikalı bahçelerde uygulanabilir.",
+    "resistance_management": "Aynı etki mekanizmalı (FRAC grubu) fungisitleri art arda kullanmaktan kaçının; kükürt → triazol → strobilurin rotasyonu uygulayın; ilaç seyreltmesine kesinlikle dikkat edin."
+  }
 }
 
-Kural:
+Zorunlu kurallar:
 - pathogen_type: fungal | bacterial | viral | pest | none
 - spread_risk: low | medium | high
 - spread_speed: slow | medium | fast | none
 - risk_level: 1=sağlıklı, 2=takip et, 3=dikkat, 4=yüksek risk, 5=acil müdahale
-- confidence_score: 0-100 arası tam sayı
-- Bitki sağlıklıysa risk_level=1, is_healthy alanı ekleyebilirsin ama zorunlu değil.\
+- confidence_score: 0-100 tam sayı
+- hotspot_regions: görselde enfekte bölgelerin koordinatları (x=0 sol, x=100 sağ; y=0 üst, y=100 alt)
+  intensity: 0.9-1.0 → kırmızı (kritik), 0.5-0.89 → turuncu (orta), 0.1-0.49 → sarı (hafif)
+- Bitki tamamen sağlıklıysa: risk_level=1, affected_percentage=0, hotspot_regions=[]
+- Tüm Türkçe metinler bilimsel/teknik ziraat mühendisliği dilinde olmalı\
 """
 
 
@@ -443,7 +471,7 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
         result = await asyncio.wait_for(
             async_client.chat.completions.create(
                 model="gpt-4o-mini",
-                max_tokens=1500,
+                max_tokens=2500,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -539,6 +567,37 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
         except Exception:
             pass
 
+    hotspot_regions: list[HotspotRegion] = []
+    for hr in data.get("hotspot_regions", []):
+        try:
+            hotspot_regions.append(HotspotRegion(
+                x_percent=max(0.0, min(100.0, float(hr.get("x_percent", 50)))),
+                y_percent=max(0.0, min(100.0, float(hr.get("y_percent", 50)))),
+                radius_percent=max(0.0, min(50.0, float(hr.get("radius_percent", 15)))),
+                intensity=max(0.0, min(1.0, float(hr.get("intensity", 0.5)))),
+                label=str(hr.get("label", "")),
+            ))
+        except Exception:
+            pass
+
+    expert_analysis: ExpertAnalysis | None = None
+    expert_data = data.get("expert_analysis", {})
+    if isinstance(expert_data, dict) and expert_data:
+        try:
+            expert_analysis = ExpertAnalysis(
+                biology=str(expert_data.get("biology", "")),
+                spread_mechanism=str(expert_data.get("spread_mechanism", "")),
+                environmental_conditions=str(expert_data.get("environmental_conditions", "")),
+                economic_impact=str(expert_data.get("economic_impact", "")),
+                diagnosis_certainty=str(expert_data.get("diagnosis_certainty", "")),
+                similar_diseases=str(expert_data.get("similar_diseases", "")),
+                treatment_protocol=str(expert_data.get("treatment_protocol", "")),
+                organic_alternatives=str(expert_data.get("organic_alternatives", "")),
+                resistance_management=str(expert_data.get("resistance_management", "")),
+            )
+        except Exception as exc:
+            print(f"[Vision] expert_analysis parse hatası: {exc}", flush=True)
+
     enrichment = DiseaseEnrichment(
         disease_name_tr=disease_name_tr,
         disease_name_en=disease_name_en,
@@ -556,6 +615,11 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
         prognosis_without_treatment=str(data.get("prognosis_without_treatment", "")),
         harvest_impact=str(data.get("harvest_impact", "")),
         next_season_prevention=str(data.get("next_season_prevention", "")),
+        hotspot_regions=hotspot_regions,
+        healthy_percentage=max(0, min(100, int(data.get("healthy_percentage", 100)))),
+        affected_percentage=max(0, min(100, int(data.get("affected_percentage", 0)))),
+        severity_distribution=str(data.get("severity_distribution", "")),
+        expert_analysis=expert_analysis,
     )
 
     leaf_resp = LeafDetectionResponse(

@@ -131,6 +131,26 @@ export interface TreatmentProduct {
   price_range_tl: string;
 }
 
+export interface HotspotRegion {
+  x_percent: number;
+  y_percent: number;
+  radius_percent: number;
+  intensity: number;
+  label: string;
+}
+
+export interface ExpertAnalysis {
+  biology: string;
+  spread_mechanism: string;
+  environmental_conditions: string;
+  economic_impact: string;
+  diagnosis_certainty: string;
+  similar_diseases: string;
+  treatment_protocol: string;
+  organic_alternatives: string;
+  resistance_management: string;
+}
+
 export interface DiseaseEnrichment {
   disease_name_tr: string;
   disease_name_en: string;
@@ -148,6 +168,11 @@ export interface DiseaseEnrichment {
   prognosis_without_treatment: string;
   harvest_impact: string;
   next_season_prevention: string;
+  hotspot_regions: HotspotRegion[];
+  healthy_percentage: number;
+  affected_percentage: number;
+  severity_distribution: string;
+  expert_analysis: ExpertAnalysis | null;
 }
 
 export interface FullAnalysisResult {

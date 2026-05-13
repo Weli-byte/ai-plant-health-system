@@ -214,6 +214,28 @@ class TreatmentProduct(BaseModel):
     price_range_tl: str = Field(..., description="Tahmini fiyat aralığı (TL).")
 
 
+class HotspotRegion(BaseModel):
+    """Görsel üzerindeki enfeksiyon odak noktası (canvas overlay için)."""
+    x_percent: float = Field(..., ge=0, le=100, description="Yatay konum % (sol=0, sağ=100).")
+    y_percent: float = Field(..., ge=0, le=100, description="Dikey konum % (üst=0, alt=100).")
+    radius_percent: float = Field(..., ge=0, le=50, description="Yarıçap % (görselin kısa kenarına oranla).")
+    intensity: float = Field(..., ge=0, le=1, description="Enfeksiyon yoğunluğu (0=hafif, 1=kritik).")
+    label: str = Field(..., description="Odak noktası açıklama etiketi.")
+
+
+class ExpertAnalysis(BaseModel):
+    """Uzman ziraat mühendisi derinlemesine analiz raporu."""
+    biology: str = Field(..., description="Patojenin biyolojisi ve yaşam döngüsü.")
+    spread_mechanism: str = Field(..., description="Yayılma mekanizması ve vektörler.")
+    environmental_conditions: str = Field(..., description="Hastalığı tetikleyen çevresel koşullar.")
+    economic_impact: str = Field(..., description="Ekonomik etki ve verim kaybı analizi.")
+    diagnosis_certainty: str = Field(..., description="Teşhis kesinliği ve ayırıcı tanı.")
+    similar_diseases: str = Field(..., description="Benzer görünümlü hastalıklar ve ayırt edici özellikler.")
+    treatment_protocol: str = Field(..., description="Adım adım uygulama protokolü.")
+    organic_alternatives: str = Field(..., description="Organik ve biyolojik mücadele alternatifleri.")
+    resistance_management: str = Field(..., description="Direnç yönetimi ve rotasyon stratejisi.")
+
+
 class DiseaseEnrichment(BaseModel):
     """Hastalık hakkında zenginleştirilmiş bilgi paketi."""
     disease_name_tr: str = Field(..., description="Hastalığın Türkçe adı.")
@@ -232,6 +254,11 @@ class DiseaseEnrichment(BaseModel):
     prognosis_without_treatment: str = Field(..., description="Tedavisiz prognoz.")
     harvest_impact: str = Field(..., description="Hasat üzerindeki etkisi.")
     next_season_prevention: str = Field(..., description="Gelecek sezon önleme önerileri.")
+    hotspot_regions: list[HotspotRegion] = Field(default_factory=list, description="Canvas overlay için enfeksiyon odak noktaları.")
+    healthy_percentage: int = Field(default=100, ge=0, le=100, description="Sağlıklı alan yüzdesi.")
+    affected_percentage: int = Field(default=0, ge=0, le=100, description="Etkilenen alan yüzdesi.")
+    severity_distribution: str = Field(default="", description="Şiddet dağılımı açıklaması.")
+    expert_analysis: Optional[ExpertAnalysis] = Field(None, description="Uzman ziraat mühendisi derinlemesine raporu.")
 
 
 class FullAnalysisResponse(BaseModel):
