@@ -21,7 +21,8 @@ import logging
 from fastapi import APIRouter, File, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
-import anthropic
+from openai import AsyncOpenAI
+import openai
 
 # AI servis fonksiyonları
 from app.services.leaf_detection_service import detect_leaf
@@ -515,20 +516,15 @@ async def analyze_endpoint(
 # =============================================================================
 # Sistem Prompt — Zirai Asistan Kişiliği
 #
-AGRI_SYSTEM_PROMPT = """Sen Türkiye'nin önde gelen ziraat mühendislerinden Doç. Dr. Ahmet Yılmaz'sın. Çukurova Üniversitesi Ziraat Fakültesi mezunu, Ege ve Güneydoğu Anadolu'da 25 yıl saha çalışması var.
-
-KONUŞMA KURALLARI:
-- Kullanıcının sorusunu oku, tam olarak o konuya cevap ver
-- Soru sormadan önce elindeki bilgiyle cevap ver
-- Maksimum 3 paragraf, net ve uygulanabilir
-- Somut: ilaç adı, doz, zamanlama, fiyat aralığı ver
-- Türk çiftçisinin bulabileceği ürünleri öner (Tarkim, Bayer TR, Syngenta TR)
-- Mevsim ve bölgeye göre özelleştir
-- Doğal konuş, robotik başlıklar (Adım 1, Kök Neden) kullanma
-
-ÖRNEK DOĞRU CEVAP:
-Soru: "Sulamayı artırayım mı?"
-Cevap: "Bu sorunun cevabı bitkiye ve toprağa göre değişir, ama genel kural şu: toprak 5-10 cm derinlikte nemli kalmalı. Parmağınızı toprağa sokun, kuru geliyorsa sulama vakti. Yazın sıcak günlerde (35°C+) sabah 07:00 öncesi sulayın, öğlen sulaması yaprak yanmasına neden olur. Hangi bitkiyi yetiştiriyorsunuz, ona göre daha spesifik söyleyebilirim.\""""
+AGRI_SYSTEM_PROMPT = (
+    "Sen Türkiye'nin deneyimli bir ziraat mühendisisin. "
+    "25 yıl Ege ve Güneydoğu Anadolu'da çalıştın. "
+    "Soruyu oku, direkt cevap ver. "
+    "Somut ol: ilaç adı, doz, zamanlama yaz. "
+    "Türkiye'de bulunabilen ürünleri öner. "
+    "Maksimum 3 paragraf, sade dil. "
+    "Robotik başlık kullanma."
+)
 
 
 # =============================================================================
@@ -541,59 +537,58 @@ Cevap: "Bu sorunun cevabı bitkiye ve toprağa göre değişir, ama genel kural 
     summary="Zirai Yapay Zeka Asistanı ile sohbet et",
     description=(
         "Kullanıcının bitki sağlığı, tarım ve bakım hakkındaki sorularını yanıtlar. "
-        "Anthropic Claude (claude-haiku-4-5) modeli ile konuşma geçmişini dikkate alarak "
-        "samimi ve doğrudan cevaplar verir."
+        "OpenAI GPT-4o-mini modeli ile konuşma geçmişini dikkate alarak cevaplar verir."
     )
 )
 async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
-    """
-    Zirai asistan — Anthropic Claude API ile gerçek LLM cevabı üretir.
-    Konuşma geçmişi her istekte Anthropic messages formatında iletilir.
-    """
-    if not settings.ANTHROPIC_API_KEY:
+    """Zirai asistan — OpenAI GPT-4o-mini ile gerçek LLM cevabı üretir."""
+    if not settings.OPENAI_API_KEY:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Anthropic API anahtarı yapılandırılmamış. .env dosyasına ANTHROPIC_API_KEY ekleyin.",
+            detail="OpenAI API anahtarı yapılandırılmamış. .env dosyasına OPENAI_API_KEY ekleyin.",
         )
 
-    messages = [
+    history = [
         {"role": msg.role, "content": msg.content}
         for msg in request.history
     ]
-    messages.append({"role": "user", "content": request.message})
+    messages = [
+        {"role": "system", "content": AGRI_SYSTEM_PROMPT},
+        *history,
+        {"role": "user", "content": request.message},
+    ]
 
-    async_client = anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    async_client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
     try:
         result = await asyncio.wait_for(
-            async_client.messages.create(
-                model="claude-haiku-4-5-20251001",
-                max_tokens=1000,
-                system=AGRI_SYSTEM_PROMPT,
+            async_client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=800,
                 messages=messages,
             ),
             timeout=25.0,
         )
-        response_text = result.content[0].text
+        response_text = result.choices[0].message.content
     except asyncio.TimeoutError:
-        logger.warning("Anthropic API 25 saniye içinde yanıt vermedi.")
+        logger.warning("OpenAI API 25 saniye içinde yanıt vermedi.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Şu an yoğunluk var, tekrar dener misiniz?",
         )
-    except anthropic.AuthenticationError:
-        logger.error("Anthropic API kimlik doğrulama hatası — geçersiz API anahtarı.")
+    except openai.AuthenticationError:
+        logger.error("OpenAI API kimlik doğrulama hatası — geçersiz API anahtarı.")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Anthropic API anahtarı geçersiz.",
+            detail="OpenAI API anahtarı geçersiz.",
         )
-    except anthropic.RateLimitError:
-        logger.warning("Anthropic API hız limiti aşıldı.")
+    except openai.RateLimitError:
+        logger.warning("OpenAI API hız limiti aşıldı.")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Şu an yoğunluk var, tekrar dener misiniz?",
         )
     except Exception as exc:
-        logger.error(f"Anthropic API hatası: {exc}")
+        logger.error(f"OpenAI API hatası: {exc}")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="AI servisi geçici olarak kullanılamıyor.",
