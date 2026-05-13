@@ -1,9 +1,14 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
-import { Send, Sparkles, Sprout, Sun, Droplets, Wheat } from "lucide-react";
+import { Send, Sparkles, Sprout, Sun, Droplets, Wheat, Paperclip, X, Image } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { aiApi } from "@/services/api";
 
-type Msg = { id: number; role: "user" | "ai"; content: string };
+type Msg = {
+  id: number;
+  role: "user" | "ai";
+  content: string;
+  imagePreview?: string; // base64 thumbnail
+};
 
 const suggestions = [
   { icon: Sprout, text: "Bu hastalık neden olur?" },
@@ -18,26 +23,61 @@ export default function Chat() {
       id: 1,
       role: "ai",
       content:
-        "Merhaba 🌿 Ben tarla asistanın. Bitkilerin, hastalıklar, sulama ya da ne ekeceğin hakkında istediğini sorabilirsin. Sade konuşalım.",
+        "Merhaba 🌿 Ben deneyimli bir Türk ziraat mühendisiyim. Bitkilerin, hastalıklar, sulama ya da ne ekeceğin hakkında istediğini sorabilirsin. Fotoğraf yükleyerek anında analiz de yaptırabilirsin.",
     },
   ]);
   const [input, setInput] = useState("");
   const [thinking, setThinking] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, thinking]);
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedImage(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+    // Input'u sıfırla (aynı dosyayı tekrar seçebilsin)
+    e.target.value = "";
+  };
+
+  const clearImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
   const send = async (text: string) => {
-    if (!text.trim()) return;
-    const userMsg: Msg = { id: Date.now(), role: "user", content: text };
+    const hasImage = !!selectedImage;
+    const hasText = text.trim().length > 0;
+    if (!hasImage && !hasText) return;
+
+    const preview = imagePreview ?? undefined;
+    const userMsg: Msg = {
+      id: Date.now(),
+      role: "user",
+      content: text || (hasImage ? "📷 Fotoğraf yüklendi" : ""),
+      imagePreview: preview,
+    };
     setMessages((m) => [...m, userMsg]);
     setInput("");
+    clearImage();
     setThinking(true);
 
     try {
-      const data = await aiApi.chat(text);
+      let data;
+      if (hasImage) {
+        data = await aiApi.chatWithImage(selectedImage!, text);
+      } else {
+        data = await aiApi.chat(text);
+      }
+
       const aiMsg: Msg = {
         id: Date.now() + 1,
         role: "ai",
@@ -46,12 +86,14 @@ export default function Chat() {
       setMessages((m) => [...m, aiMsg]);
     } catch (error) {
       console.error("Chat API hatası:", error);
-      const errorMsg: Msg = {
-        id: Date.now() + 1,
-        role: "ai",
-        content: "Üzgünüm, şu an yanıt veremiyorum. Sunucu bağlantısını kontrol edin.",
-      };
-      setMessages((m) => [...m, errorMsg]);
+      setMessages((m) => [
+        ...m,
+        {
+          id: Date.now() + 1,
+          role: "ai",
+          content: "Üzgünüm, şu an yanıt veremiyorum. Sunucu bağlantısını kontrol edin.",
+        },
+      ]);
     } finally {
       setThinking(false);
     }
@@ -63,7 +105,6 @@ export default function Chat() {
   };
 
   return (
-    // Tüm chat ekranı toprak tonlarında — siyah YOK.
     <div
       className="-mx-4 -mb-24 flex h-[calc(100dvh-9rem)] flex-col"
       style={{ background: "var(--gradient-earth)" }}
@@ -75,7 +116,7 @@ export default function Chat() {
         </div>
         <div>
           <p className="text-base font-semibold text-foreground">Tarla Asistanı</p>
-          <p className="text-xs text-muted-foreground">Çiftçi diliyle, sade cevaplar</p>
+          <p className="text-xs text-muted-foreground">Ziraat mühendisi · Fotoğraf analizi</p>
         </div>
       </div>
 
@@ -91,6 +132,9 @@ export default function Chat() {
               <Dot delay="0.15s" />
               <Dot delay="0.3s" />
             </div>
+            {selectedImage && (
+              <span className="text-[11px] text-muted-foreground">Fotoğraf analiz ediliyor...</span>
+            )}
           </div>
         )}
 
@@ -105,21 +149,69 @@ export default function Chat() {
                 <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent text-accent-foreground">
                   <s.icon className="h-4 w-4" />
                 </span>
-                <span className="text-xs font-medium leading-snug text-foreground">
-                  {s.text}
-                </span>
+                <span className="text-xs font-medium leading-snug text-foreground">{s.text}</span>
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Big input */}
+      {/* Input area */}
       <form
         onSubmit={handleSubmit}
         className="border-t border-border/60 bg-card/80 px-3 py-3 backdrop-blur"
       >
-        <div className="flex items-end gap-2 rounded-3xl bg-background px-4 py-3 shadow-card">
+        {/* Fotoğraf önizlemesi */}
+        {imagePreview && (
+          <div className="mb-2 flex items-center gap-2 rounded-2xl bg-accent/50 p-2">
+            <img
+              src={imagePreview}
+              alt="Seçilen fotoğraf"
+              className="h-14 w-14 rounded-xl object-cover"
+            />
+            <div className="flex-1">
+              <p className="text-xs font-medium text-foreground">{selectedImage?.name}</p>
+              <p className="text-[10px] text-muted-foreground">
+                {selectedImage ? `${(selectedImage.size / 1024).toFixed(0)} KB` : ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={clearImage}
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-background/80 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        <div className="flex items-end gap-2 rounded-3xl bg-background px-3 py-2.5 shadow-card">
+          {/* Fotoğraf yükleme butonu */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition",
+              imagePreview
+                ? "bg-primary/15 text-primary"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground"
+            )}
+            title="Fotoğraf yükle"
+          >
+            {imagePreview ? (
+              <Image className="h-4 w-4" />
+            ) : (
+              <Paperclip className="h-4 w-4" />
+            )}
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleImageSelect}
+            className="hidden"
+          />
+
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -130,19 +222,25 @@ export default function Chat() {
               }
             }}
             rows={1}
-            placeholder="Bir şey sor… mesela 'sulamayı artırayım mı?'"
+            placeholder={
+              imagePreview
+                ? "Fotoğraf hakkında soru ekleyebilirsiniz… (opsiyonel)"
+                : "Bir şey sor… mesela 'sulamayı artırayım mı?'"
+            }
             className="max-h-32 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
           />
+
           <button
             type="submit"
-            disabled={!input.trim()}
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-leaf-gradient text-primary-foreground shadow-soft transition disabled:opacity-50"
+            disabled={!input.trim() && !selectedImage}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-leaf-gradient text-primary-foreground shadow-soft transition disabled:opacity-50"
           >
             <Send className="h-4 w-4" />
           </button>
         </div>
+
         <p className="mt-2 text-center text-[10px] text-muted-foreground">
-          AI cevapları öneridir, kritik kararlarda tarım danışmanına başvurun.
+          AI cevapları öneridir · Fotoğraf yükleyerek bitki analizi yaptırın
         </p>
       </form>
     </div>
@@ -152,7 +250,18 @@ export default function Chat() {
 function Bubble({ msg }: { msg: Msg }) {
   const isUser = msg.role === "user";
   return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex w-full flex-col gap-1", isUser ? "items-end" : "items-start")}>
+      {/* Resim önizlemesi (kullanıcı mesajında) */}
+      {msg.imagePreview && (
+        <img
+          src={msg.imagePreview}
+          alt="Yüklenen fotoğraf"
+          className={cn(
+            "max-h-48 rounded-2xl object-cover shadow-card",
+            isUser ? "rounded-br-sm" : "rounded-bl-sm"
+          )}
+        />
+      )}
       <div
         className={cn(
           "max-w-[82%] rounded-3xl px-4 py-2.5 text-sm leading-relaxed shadow-card animate-slide-up",
@@ -168,7 +277,10 @@ function Bubble({ msg }: { msg: Msg }) {
 }
 
 function format(s: string) {
-  return s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  return s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n\n/g, "<br/><br/>")
+    .replace(/\n/g, "<br/>");
 }
 
 function Dot({ delay }: { delay: string }) {

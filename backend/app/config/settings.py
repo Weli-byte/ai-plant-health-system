@@ -62,7 +62,14 @@ class Settings:
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
         "http://127.0.0.1:8080",   # Windows IPv4 çözümlemesi için kritik
+        "http://0.0.0.0:8080",     # Vite 0.0.0.0 bind
     ]
+
+    # Yerel ağdaki cihazlardan erişim için IP aralığı regex'i
+    # 192.168.x.x ve 10.x.x.x özel ağ aralıklarını kapsar
+    ALLOWED_ORIGIN_REGEX: str = (
+        r"http://(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3})(:\d+)?"
+    )
 
     # External Dataset Ayarları
     DATASET_PATH: str = os.getenv("DATASET_PATH", "")

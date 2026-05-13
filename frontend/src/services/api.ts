@@ -232,6 +232,12 @@ export const aiApi = {
   },
   chat: (message: string) =>
     request<ChatResponse>("/ai/chat", { method: "POST", body: JSON.stringify({ message }) }),
+  chatWithImage: (file: File, message: string = "") => {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("message", message);
+    return requestFormData<ChatResponse>("/ai/chat-analyze", formData);
+  },
 };
 
 // ---------------------------------------------------------------------------

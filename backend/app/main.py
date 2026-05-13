@@ -13,6 +13,7 @@
 # =============================================================================
 
 import logging
+import socket
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -136,6 +137,12 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("🌱 AI Plant Health Detection System başlatılıyor...")
     logger.info(f"   Proje: {settings.PROJECT_NAME} v{settings.PROJECT_VERSION}")
+    try:
+        local_ip = socket.gethostbyname(socket.gethostname())
+        logger.info(f"🌐 Yerel Ağ Erişimi: http://{local_ip}:8000")
+        logger.info(f"   Frontend (Vite): http://{local_ip}:8080")
+    except Exception:
+        logger.info("🌐 Yerel ağ IP'si alınamadı.")
     logger.info("=" * 60)
 
     try:
@@ -213,10 +220,11 @@ app = FastAPI(
 # =============================================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.ALLOWED_ORIGINS,  # İzin verilen origin'ler
+    allow_origins=settings.ALLOWED_ORIGINS,
+    allow_origin_regex=settings.ALLOWED_ORIGIN_REGEX,  # 192.168.x.x / 10.x.x.x LAN erişimi
     allow_credentials=True,
-    allow_methods=["*"],    # GET, POST, PUT, DELETE, vb. hepsine izin ver
-    allow_headers=["*"],    # Tüm header'lara izin ver
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -289,7 +297,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
+        host="0.0.0.0",   # Tüm ağ arayüzlerinden erişim (LAN dahil)
         port=8000,
-        reload=True   # Kod değişince otomatik yeniden başlat (geliştirme modu)
+        reload=True
     )

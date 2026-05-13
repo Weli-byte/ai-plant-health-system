@@ -235,6 +235,8 @@ class ChatResponse(BaseModel):
     """Chat asistanından dönen yanıt şeması."""
     success: bool = True
     response: str = Field(..., description="Yapay zeka asistanının cevabı.")
+    detected_disease: Optional[str] = Field(None, description="Fotoğraf analizinde tespit edilen hastalık (sadece /ai/chat-analyze'da dolar).")
+    confidence: Optional[float] = Field(None, description="Hastalık tespit güven skoru.")
     message: str = "Asistan yanıtı hazır."
 
 

@@ -17,7 +17,7 @@
 # =============================================================================
 
 import logging
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, status
 from fastapi.responses import JSONResponse
 
 # AI servis fonksiyonları
@@ -507,6 +507,27 @@ async def analyze_endpoint(
         message=final_message,
     )
 # =============================================================================
+# Sistem Prompt — Zirai Asistan Kişiliği
+#
+# Bu prompt, asistanın nasıl yanıt vereceğini tanımlar.
+# İleride bir LLM (Gemini/Claude/OpenAI) entegrasyonunda doğrudan system
+# message olarak kullanılacaktır. Şu an kural tabanlı motorda referans alınır.
+# =============================================================================
+
+AGRI_SYSTEM_PROMPT = """
+Sen deneyimli bir Türk ziraat mühendisisin. 20 yıllık saha deneyimin var.
+Kullanıcılara her zaman:
+- Önce sorunun kök nedenini açıkla
+- Sonra adım adım çözüm yolu sun
+- Hangi ürünleri/ilaçları kullanacağını, dozajını ve uygulama zamanını belirt
+- Hava/mevsim koşullarına göre özel uyarı ekle
+- Cevabın sonunda bir önleyici bakım önerisi ver
+Cevapların en az 3-4 paragraf olsun. Teknik terimleri kullan ama hemen Türkçe açıklamasını da yaz.
+Kullanıcının yetiştirdiği ürüne ve bölgesine özel cevap ver.
+"""
+
+
+# =============================================================================
 # Endpoint 5: POST /ai/chat
 # =============================================================================
 
@@ -516,143 +537,546 @@ async def analyze_endpoint(
     summary="Zirai Yapay Zeka Asistanı ile sohbet et",
     description=(
         "Kullanıcının bitki sağlığı, tarım ve bakım hakkındaki sorularını yanıtlar. "
-        "Bu endpoint, uzman bir zirai danışman gibi davranır."
+        "Deneyimli bir Türk ziraat mühendisi kimliğiyle, 3-4 paragraf detaylı yanıtlar verir."
     )
 )
 async def ai_chat_endpoint(request: ChatRequest) -> ChatResponse:
     """
-    Zirai asistan mantığı. Şu an için kural tabanlı gelişmiş bir motor 
-    kullanılmaktadır ancak ileride bir LLM (Gemini/OpenAI) ile entegre edilebilir.
+    Zirai asistan — AGRI_SYSTEM_PROMPT kurallarını izleyen kural tabanlı motor.
+    Her yanıt: kök neden → çözüm adımları → ilaç/dozaj → hava uyarısı → önleyici bakım.
     """
     msg = request.message.lower()
-    
+
     import random
-    
-    # Gelişmiş Bilgi Tabanlı Mantık (API üzerinden gelen gerçek yanıtlar)
-    if any(k in msg for k in ["külleme", "mildew", "beyaz leke"]):
+
+    if any(k in msg for k in ["külleme", "mildew", "beyaz leke", "beyaz toz"]):
         response = (
-            "Külleme (Powdery Mildew) mantar kaynaklı bir hastalıktır. "
-            "Kükürt bazlı ilaçlar etkilidir ancak uygulama sırasında hava sıcaklığının "
-            "30 derecenin altında olmasına dikkat edin. Akşam saatlerini tercih edin."
+            "**Kök Neden:** Külleme (Powdery Mildew — Erysiphe spp.), yüksek nem (%60-80) ile "
+            "günlük sıcaklık dalgalanmalarının bir arada bulunduğu koşullarda hızla yayılır. "
+            "Toprak nemi fazla olduğunda ancak yaprak yüzeyi kuru kaldığında mantar sporları "
+            "yaprak epidermisine kolayca tutunur ve beyaz pudra görünümünü oluşturur.\n\n"
+            "**Çözüm Adımları:**\n"
+            "1. Belirtili yaprakları hemen uzaklaştırın ve imha edin (kompost yapmayın).\n"
+            "2. %0,2 konsantrasyonunda kükürt bazlı fungisit (örn. Kumulus DF veya Thiovit Jet) hazırlayın.\n"
+            "3. Sabah erken (07:00-09:00) veya akşam (18:00-20:00) uygulayın; güneş altında kükürt yaprak yakar.\n"
+            "4. 10-14 gün arayla en az 2-3 uygulama yapın.\n\n"
+            "**Hava Durumu Uyarısı:** Sıcaklık 30°C'yi aştığında kükürt uygulaması yaprak yanığına "
+            "yol açabilir; bu durumda trifloksistrobin veya azoksistrobin etken maddeli fungisitlere "
+            "geçin (örn. Amistar 250 SC, doz: 0,8 L/da). Yağmur beklenen günlerde ilaçlamayı erteleyip "
+            "sistematik (içten etkili) fungisit tercih edin.\n\n"
+            "**Önleyici Bakım:** Bitkiler arası mesafeyi koruyun, hava sirkülasyonunu artırın. "
+            "Sezon başında bakır oksiklorür (%50 WP, 3 g/L) ile koruyucu ilaçlama yapın. "
+            "Dayanıklı çeşit kullanımı uzun vadede en etkili önlemdir."
         )
-    elif any(k in msg for k in ["su", "sulama", "nem"]):
+    elif any(k in msg for k in ["pas", "rust", "turuncu leke", "pas lekesi"]):
         response = (
-            "Bitki sulamasında temel kural toprağın üst yüzeyinin kurumuş olmasıdır. "
-            "Mantar hastalıklarını önlemek için yapraklara su değdirmemeye ve "
-            "sabahın erken saatlerinde sulama yapmaya özen gösterin."
+            "**Kök Neden:** Pas hastalığı (Rust — Puccinia spp.) yüksek nem (%80+) ve serin geceler "
+            "(10-20°C) ile sıcak gündüzlerin birleştiği koşullarda patlak verir. Sporlar rüzgar ve "
+            "yağmur sıçramasıyla yayılır; yaprak altında turuncu-kahverengi toz benzeri pustüller "
+            "(spor yatakları) oluşturur. Azot fazlası da bitkiyi duyarlı hale getirir.\n\n"
+            "**Çözüm Adımları:**\n"
+            "1. Hastalıklı yaprakları kesip imha edin; kesmek için dezenfekteli alet kullanın.\n"
+            "2. Bordo bulamacı (%1 — 10 g göztaşı + 10 g kireç / 1 L su) hazırlayın ve uygulayın.\n"
+            "3. Alternatif: Propikonazol etken maddeli fungisit (Tilt 250 EC, 0,5 ml/L, 7 günde bir).\n"
+            "4. Üst ve alt yaprak yüzeylerini dikkatlice kaplayan spreyleme yapın.\n\n"
+            "**Hava Durumu Uyarısı:** Yağmurlu ve rüzgarlı havada ilaçlama etkisiz kalır; "
+            "48 saat kuru hava beklenen bir pencere seçin. İlkbaharda geceleri sıcaklık 10°C'nin "
+            "altına iniyorsa bitkileri sera örtüsüyle koruyun.\n\n"
+            "**Önleyici Bakım:** Gübreleme dengesine dikkat edin — aşırı azot pas duyarlılığını artırır. "
+            "Sezon sonunda yere dökülen yaprakları tarla içinde bırakmayın; sporlar kışı toprakta geçirir. "
+            "Çeşit seçiminde pas dayanıklılığı skoru yüksek tohumları tercih edin."
         )
-    elif any(k in msg for k in ["gübre", "besin", "npk"]):
+    elif any(k in msg for k in ["sulama", "su ihtiyacı", "ne kadar su", "ne zaman sula"]):
         response = (
-            "Bitkinizin gelişim evresine göre gübreleme yapmalısınız. "
-            "Yaprak gelişimi için Azot (N), çiçeklenme için Fosfor (P) ağırlıklı "
-            "organik gübreler tavsiye edilir. Hastalıklı bitkiye ağır gübreleme yapmayın."
+            "**Kök Neden:** Sulama hatası, hem su stresi (yetersiz sulama) hem de kök çürüklüğü "
+            "(aşırı sulama) olarak iki farklı sorun doğurur. Toprağın türü belirleyicidir: killi toprak "
+            "suyu uzun süre tutar ve kök boğulmasına yol açabilirken, kumlu toprak hızla kurur.\n\n"
+            "**Doğru Sulama Yöntemi:**\n"
+            "1. Sulama zamanı: Sabah erken (06:00-08:00) en iyisidir — yapraklar akşama kadar kurur, mantar riski azalır.\n"
+            "2. Parmak testi: Toprağa 5 cm bastırın; ıslak his varsa bir gün bekleyin.\n"
+            "3. Sebzeler için genel kural: Haftada 2-3 kez, her seferinde toprak 30 cm derinliğe ıslanacak şekilde.\n"
+            "4. Damla sulama sistemleri su tüketimini %40 azaltır ve yaprakları kuru tutar.\n\n"
+            "**Mevsim Uyarısı:** Yaz aylarında günlük buharlaşma artar; sıcak dönemlerde sulama "
+            "sıklığını artırıp miktarı değiştirmeyin. Mulç (saman/örtü) uygulaması toprak nemini "
+            "%25-30 oranında muhafaza eder. Don riski olan gecelerde sulama yapıp toprağı nemli bırakmak "
+            "küçük çaplı don zararını azaltabilir (su donduğunda ısı açığa çıkar).\n\n"
+            "**Önleyici Bakım:** Damla sulama borusu ucuna filtre takın — tıkanma sulama düzensizliğinin "
+            "başlıca nedenidir. Toprak nem sensörü (ucuz Arduino tabanlı) kurarak dijital takip yapabilirsiniz."
         )
-    elif any(k in msg for k in ["pas", "rust", "turuncu"]):
+    elif any(k in msg for k in ["gübre", "besin eksikliği", "npk", "azot", "fosfor", "potasyum"]):
         response = (
-            "Pas hastalığı genellikle yüksek nemden kaynaklanır. Bakır içerikli "
-            "fungisitler (Bordo bulamacı gibi) bu hastalıkta oldukça etkilidir. "
-            "Hastalıklı yaprakları derhal imha edin."
+            "**Kök Neden:** Bitki besin eksiklikleri üç temel nedenden kaynaklanır: toprağın pH'ı "
+            "yanlış aralıkta olduğunda (6.0-7.0 dışı) bitkiler besinleri emse bile alamaz; sulama fazlalığı "
+            "besinleri yıkar (leaching); organik madde azlığı toprak canlılığını düşürür.\n\n"
+            "**Gelişim Evresine Göre Gübreleme:**\n"
+            "1. Fide/vegetatif dönem: Azot (N) ağırlıklı gübre — 20-10-10 formülasyon, 14 günde bir.\n"
+            "2. Çiçeklenme dönemi: Fosfor (P) ağırlıklı — 10-30-10; fosfor çiçek ve meyve bağlamayı tetikler.\n"
+            "3. Meyve dolum: Potasyum (K) ağırlıklı — 5-10-40; meyve kalitesini, şeker oranını artırır.\n"
+            "4. Uygulama dozu: Kural olarak 1-2 kg NPK / 100 m² (toprak testi sonuçlarına göre ayarlayın).\n\n"
+            "**Eksiklik Belirtileri ve Hızlı Müdahale:**\n"
+            "- Sarı yapraklar + zayıf büyüme → Azot eksikliği → üre (%46 N) 1 g/L yaprak gübresi.\n"
+            "- Mor/kırmızı renklenme → Fosfor eksikliği → mono potasyum fosfat, 2 g/L.\n"
+            "- Yaprak kenarı yanması → Potasyum eksikliği → potasyum nitrat, 3 g/L.\n\n"
+            "**Önleyici Bakım:** Güz ayında yanmış ahır gübresi veya kompost (3-5 ton/da) "
+            "toprağa karıştırın. İlkbaharda 'slow release' (yavaş salınımlı) gübre kullanmak "
+            "tüm sezon boyunca dengeli beslenme sağlar ve yıkanma kaybını minimuma indirir."
         )
-    elif any(k in msg for k in ["ek", "tohum", "dikim", "ne ekmeliyim", "mevsim"]):
+    elif any(k in msg for k in ["domates", "tomato", "domates hastalığı"]):
         response = (
-            "Ekim yapacağınız bitki mevsime ve bölgenizin toprak yapısına göre değişir. "
-            "İlkbahar aylarında (Mart-Mayıs) domates, biber, patlıcan ekimi uygundur. "
-            "Kış aylarında ise ıspanak, lahana, pırasa gibi soğuğa dayanıklı bitkileri tercih edebilirsiniz. "
-            "Toprağınızı ekimden önce havalandırmayı unutmayın."
+            "**Kök Neden:** Domateste en sık görülen sorunlar şunlardır: Erken yanıklık "
+            "(Alternaria solani — yaprak lekesi), Geç yanıklık (Phytophthora infestans — kahverengi çürüme) "
+            "ve Septoria yaprak lekesi. Bu hastalıkların tümü serin-nemli koşullarda (15-22°C, nem >80%) "
+            "yayılır. Aşırı sık dikim ve yetersiz budama risk faktörleridir.\n\n"
+            "**Önce Teşhis, Sonra Tedavi:**\n"
+            "1. Alt yapraklarda sarı halkalı koyu lekeler → Erken yanıklık → Mankozeb 80 WP, 2.5 g/L, 7 günde bir.\n"
+            "2. Kahverengi yağ lekesi, beyaz küf → Geç yanıklık → Metalaxyl-M (Ridomil Gold), 2.5 g/L, acil uygulama.\n"
+            "3. Küçük koyu noktalı sarı lekeler → Septoria → Bakır oksiklorür %50, 3 g/L.\n"
+            "4. Tüm uygulamalarda 7-10 gün arayla 2-3 tur uygulama yapın.\n\n"
+            "**Hava Uyarısı:** Yağmur öncesi sistematik fungisit, yağmur sonrası koruyucu bakır bileşiği "
+            "mantığını izleyin. Sıcaklık 28°C'yi aşınca bakır bileşikleri fitotoksik olabilir; güneşsiz "
+            "saatlerde uygulayın. Akdeniz bölgesinde Temmuz-Ağustos'ta Fusarium solgunluğuna da dikkat edin.\n\n"
+            "**Önleyici Bakım:** Ekim nöbeti uygulayın — aynı tarlaya 3 yıldan önce domates ekmemeye "
+            "çalışın. Alt yaprakları budayarak hava sirkülasyonunu artırın ve sulama suyunu toprağa "
+            "verin, yapraklara değil. Hasat öncesi son ilaçlamadan en az 7 gün bekleyin."
         )
-    elif any(k in msg for k in ["hastalık", "hasta", "böcek", "zararlı"]):
+    elif any(k in msg for k in ["biber", "pepper", "patlıcan", "aubergine", "biberim", "patlıcanım"]):
         response = (
-            "Bitkilerdeki hastalıklar genelde mantari, bakteriyel veya zararlı böcek kaynaklıdır. "
-            "Yapraklarda delikler varsa böcekleri, beyaz veya kahverengi lekeler varsa mantarı şüphelenebilirsiniz. "
-            "Kesin bir tanı için uygulamanın 'Yeni Analiz Başlat' kısmından yaprağın fotoğrafını yükleyin."
+            "**Kök Neden:** Biber ve patlıcan tropik kökenlidir; 15°C'nin altında büyüme durur "
+            "ve soğuk stresi bağışıklık sistemini zayıflatır. En yaygın sorunlar: Kök çürüklüğü "
+            "(Phytophthora capsici), Solgunluk (Fusarium), Yaprak biti (Aphis gossypii) ve "
+            "Kırmızı örümcek akarı (Tetranychus urticae) — son ikisi sıcak ve kuru havalarda patlak verir.\n\n"
+            "**Soruna Göre Müdahale:**\n"
+            "1. Solgunluk + gövde dibinde çürüme → Phytophthora → Fosetil-Al (Aliette 80 WP, 3 g/L sulama).\n"
+            "2. Yaprak biti → Yaprak altında yeşil/siyah koloniler → Imidacloprid (Confidor 200 SL, 0.5 ml/L) veya neem yağı (%2).\n"
+            "3. Kırmızı örümcek → İnce ağ, soluk yapraklar → Abamektin (Vertimec 1.8 EC, 1 ml/L).\n"
+            "4. Genel koruyucu → 15 günde bir bakır hidroksit (Kocide 2000, 2 g/L).\n\n"
+            "**Hava Uyarısı:** Haziran-Ağustos döneminde sıcaklık 38°C'yi aşınca gölgeleme yapın; "
+            "çiçek dökülmesi yaşanır. Akşam saatlerinde hafif yağmurlama (misting) biber için "
+            "çok faydalıdır ama sera dışında kırmızı örümcek baskısında sulama yaprağa değmemeli.\n\n"
+            "**Önleyici Bakım:** Fide dikiminden 2 hafta önce toprağa Trichoderma harzianum bazlı "
+            "biyofungisit karıştırın; bu toprak kökenli hastalıklara karşı doğal koruma sağlar. "
+            "Yüksek tünel veya sera yetiştiriciliğinde nem ve sıcaklık takibi için dijital sensör kullanın."
         )
-    elif any(k in msg for k in ["domates", "tomato"]):
+    elif any(k in msg for k in ["patates", "potato", "patatesim"]):
         response = (
-            "Domates yetiştiriciliğinde en sık karşılaşılan sorunlar külleme, erken yanıklık (Alternaria) ve "
-            "kuzey yanıklığı (Septoria)dır. Düzenli sulama ve yeterli havalandırma kritiktir. "
-            "Meyve döneminde Potasyum (K) ağırlıklı gübre uygulayın. Sararmış alt yaprakları erken kırpın."
+            "**Kök Neden:** Patateste en tehlikeli hastalık geç yanıklıktır (Phytophthora infestans — "
+            "İrlanda kıtlığının nedeni). Serin (10-20°C) ve nemli (%90+) koşullarda tek gecede "
+            "bir tarlayı çökertebilir. Bunun yanı sıra Alternarya erken yanıklığı, "
+            "Rhizoctonia kök çürüklüğü ve Colorado böceği de önemli tehditlerdir.\n\n"
+            "**Acil Müdahale Protokolü:**\n"
+            "1. Yapraklarda kahverengi yağlı lekeler + beyaz küf → DERHAL Metalaxyl-M (Ridomil Gold MZ, 2.5 g/L).\n"
+            "2. Koruyucu uygulama: Propineb (Antracol 70 WP, 2 g/L) haftada bir yağmurlu dönemde.\n"
+            "3. Colorado böceği: İmidacloprid (Confidor, 0.5 ml/L) veya spinosad (Tracer, biyolojik).\n"
+            "4. Yumru oluşum döneminde eşit sulama kritiktir — ani kuraklık+yağmur içi boş yumruya neden olur.\n\n"
+            "**Hava Uyarısı:** Geç yanıklık için Blight Advisory hesaplaması yapın: "
+            "2 gün üst üste nem>90% ve sıcaklık 10-20°C ise ilaçlamayı erteleyin, aynı gün yapın. "
+            "İlaçlamadan sonra en az 4 saat kuru hava gerekir; aksi halde etki azalır.\n\n"
+            "**Önleyici Bakım:** Hasattan sonra yumru artıklarını mutlaka topraktan çıkarın. "
+            "Sertifikalı, hastalıksız tohum yumru kullanın. 4 yıl ekim nöbeti uygulayın ve "
+            "çiçeklenme öncesi son önleyici bakır ilaçlamasını yapmayı unutmayın."
         )
-    elif any(k in msg for k in ["biber", "pepper", "patlıcan", "aubergine"]):
+    elif any(k in msg for k in ["buğday", "arpa", "çavdar", "tahıl"]):
         response = (
-            "Biber ve patlıcan, sıcaklığa çok duyarlı bitkilerdir. 15°C'nin altında büyüme durur. "
-            "Kök çürüklüğü (Phytophthora) riskine karşı aşırı sulamadan kaçının. "
-            "Yaprak biti saldırısı için doğal neem yağı spreyi etkili bir çözümdür."
+            "**Kök Neden:** Tahıllarda (buğday, arpa, çavdar) başlıca sorunlar sarı pas "
+            "(Puccinia striiformis), kahverengi pas, külleme ve septoryoz'dur. Bu hastalıkların tümü "
+            "soğuk-nemli bahar koşullarını sever. Aşırı azot gübrelemesi bitkiyi duyarlı hale getirir "
+            "ve pas ile külleme görülme sıklığını artırır.\n\n"
+            "**Fungisit Programı:**\n"
+            "1. Sapa kalkma dönemi (Z30-32): Triazol grubu fungisit — propikonazol veya epoksikonazol, 0.5 L/da.\n"
+            "2. Başaklanma öncesi (Z39-49): Strobilurin + triazol karışımı (örn. Amistar Xtra, 0.8 L/da).\n"
+            "3. Külleme varsa kükürt bazlı ek uygulama yapın.\n"
+            "4. Hava sıcaklığı 25°C üzerinde ise triazol etkinliği azalır; strobilurin ağırlıklı seçin.\n\n"
+            "**Hava Uyarısı:** Mart-Nisan'da 3 gün üst üste yağmur + nem>80% geliyorsa ilaçlamayı "
+            "öne çekin. Başak dönemi ilaçlaması don riskiyle çakışmamalı — don stresi bitkiyi zaten "
+            "strese sokarken bir de kimyasal yük bindirmek zararı artırır.\n\n"
+            "**Önleyici Bakım:** Tohum seçimi en kritik adımdır — bölgenize uygun dayanıklı çeşit "
+            "kullanın (Tarla Bitkileri Merkez Araştırma Enstitüsü çeşit listesi). "
+            "Ekim zamanını bölge normlarına göre ayarlayın; erken ekim pas ve külleme riskini artırır."
         )
-    elif any(k in msg for k in ["patates", "potato"]):
+    elif any(k in msg for k in ["üzüm", "bağ", "asma", "şarap"]):
         response = (
-            "Patateste en tehlikeli hastalık geç yanıklıktır (Phytophthora infestans). Yağmurlu ve nemli "
-            "havalarda bakırlı fungisit uygulayın. Yumru oluşum döneminde eşit sulama yapın; "
-            "ani kuraklık ardından yağmur, içi boş yumruya neden olabilir."
+            "**Kök Neden:** Asma yetiştiriciliğindeki iki büyük tehdit mildiyö (Plasmopara viticola) ve "
+            "oidium'dur (külleme, Uncinula necator). Mildiyö yağışlı ve serin havalarda, oidium ise "
+            "sıcak ve kuru havalarda baskın gelir. Üzüm için 10 yaprak döneminden başlayan koruyucu "
+            "ilaçlama programı kritiktir; geç kalınırsa mücadele çok zorlaşır.\n\n"
+            "**İlaçlama Programı (Fenolojik Döneme Göre):**\n"
+            "1. 3-5 yaprak (Nisan): Bakır oksiklorür (%50 WP, 4 g/L) — mildiyöye karşı ilk koruma.\n"
+            "2. Salkım görünüm (Mayıs): Fosetil-Al + bakır karışımı + kükürt (oidium için).\n"
+            "3. Çiçeklenme öncesi: Mancozeb 80 WP (2.5 g/L) — kritik dönem.\n"
+            "4. Ben düşme sonrası: Sistematik fungisit (metalaxyl içerikli); dozaj etiket talimatına göre.\n\n"
+            "**Hava Uyarısı:** 10 mm üzeri yağıştan sonra 24-48 saat içinde koruyucu "
+            "bakır ilaçlaması yapın. Yaz ortasında (Temmuz-Ağustos) oidium baskısı artar; "
+            "bu dönemde kükürt yerine DMI grubu (myclobutanil) tercih edin çünkü yüksek sıcaklıkta "
+            "kükürt yanık yapabilir.\n\n"
+            "**Önleyici Bakım:** Kış budamasında hasta dalları çıkarın ve yakın. "
+            "Salkım bölgesini yaprak alma ile havalandırın — iç kısımda kalan nem mildiyöyü besler. "
+            "Toprak örtüsü (otlar) nem dengesini korur; tamamen çıplak toprak bırakmayın."
         )
-    elif any(k in msg for k in ["sarı", "sararma", "sararmış", "yellow"]):
+    elif any(k in msg for k in ["zeytin", "zeytin ağacı", "zeytinlik"]):
         response = (
-            "Yaprak sararmalarının birden fazla nedeni olabilir: Azot (N) eksikliği, aşırı sulama, "
-            "kök çürüklüğü veya viral enfeksiyon. Alt yapraklar sarıyorsa azot eksikliği; "
-            "tüm yapraklar aynı anda sarıyorsa kök sorunu düşünün. "
-            "Görsel yüklersek kesin tanı koyabilirim."
+            "**Kök Neden:** Zeytinde en ciddi sorunlar zeytin sineği (Bactrocera oleae) ve "
+            "halkalı leke (Cycloconium oleaginum — zeytin yaprak lekesi) hastalığıdır. "
+            "Zeytin sineği yoğun sıcak gecelerde (20°C+) meyvede yumurtlar; "
+            "halkalı leke ise sonbahardaki yağışlarda patlak verir.\n\n"
+            "**Müdahale Stratejisi:**\n"
+            "1. Zeytin sineği → Temmuz-Ekim izleme tuzakları kurun (feromonlu). Eşik aşılınca "
+            "spinosad (Succès Bait, bait uygulaması) veya dimethoate (Rogor 40 EC, 1 ml/L — hasat öncesi 28 gün).\n"
+            "2. Halkalı leke → Sonbahar yağışları öncesi bakır oksiklorür (%50, 3 g/L) uygulayın.\n"
+            "3. Ağaç kovukları ve kuru dalları temizleyin — kışlama yuvaları yok edin.\n\n"
+            "**Hava Uyarısı:** Dimethoate gibi organofosfatlı ilaçlar yüksek sıcaklıkta "
+            "hızla buharlaşır; sabah erken veya akşam üzeri uygulayın. Zeytin sineği baskısı "
+            "özellikle kıyı bölgelerinde Ağustos-Eylül döneminde zirveye çıkar.\n\n"
+            "**Önleyici Bakım:** Her yıl budama yapın; sık dallı ağaçlarda sinek yumurtlama riski "
+            "daha yüksektir. Yere dökülen zeytinleri derhal toplayın — zeytin sineği pupası "
+            "toprakta kışlar. Organik yetiştiricilikte kaolin kili (Surround WP) meyveye "
+            "beyaz katman yaparak sinek yumurtlamasını fiziksel olarak engeller."
         )
-    elif any(k in msg for k in ["kuru", "kuruma", "solar", "solma", "solgun"]):
+    elif any(k in msg for k in ["sarı", "sararma", "sararmış", "yaprak sarı", "yellow"]):
         response = (
-            "Yaprakların solması genellikle yetersiz sulama, kök çürüklüğü veya vasküler hastalık belirtisidir. "
-            "Önce toprağı kontrol edin: Toprak nemli ama bitki solgunsa kök boğazında çürüme olabilir. "
-            "Gövde kesitinde kahverengi damarlar varsa Fusarium veya Verticillium wilti'nden şüphelenin."
+            "**Kök Neden:** Yaprak sararması (kloroz) birden fazla nedenden kaynaklanır ve "
+            "doğru teşhis yapılmazsa yanlış müdahale sorunu büyütür. Başlıca nedenler: "
+            "Azot (N) eksikliği, demir (Fe) eksikliği (alkali topraklarda), aşırı sulama → "
+            "kök çürüklüğü, viral enfeksiyon (mozaik virüs) ve kırmızı örümcek zararı.\n\n"
+            "**Renk Örüntüsüne Göre Teşhis:**\n"
+            "1. Alt yapraklar önce sararıyor → Azot eksikliği → Üre %46, 1-2 g/L yaprak gübresi.\n"
+            "2. Genç yapraklar sarı, damarlar yeşil → Demir klorozu → Şelatlı demir (Fe-EDTA, 2 g/L).\n"
+            "3. Yapraklar arası sarı, damarlar yeşil → Magnezyum eksikliği → MgSO4 (Epsom tuzu), 5 g/L.\n"
+            "4. Tüm bitki solar gibi sararıyor → Kök çürüklüğü şüphesi → Fosetil-Al sulama.\n\n"
+            "**Hava Uyarısı:** İlkbahar geçiş döneminde gece-gündüz sıcaklık farkı büyük olduğunda "
+            "demir alımı güçleşir; toprak sıcaklığı 15°C altında besin emilimi yavaşlar. "
+            "Soğuk dönemde yaprak gübre uygulaması sabah güneşli saatlerde yapılmalı.\n\n"
+            "**Önleyici Bakım:** Toprak pH'ını yılda bir ölçün (çiftçi marketlerinde basit "
+            "test kiti bulunur). pH 7.0'ı geçiyorsa kükürt uygulayarak düşürün. "
+            "Organik madde arttıkça demir ve mikro-element mevcudiyeti doğal olarak iyileşir."
+        )
+    elif any(k in msg for k in ["kuru", "kuruma", "solar", "solma", "solgun", "yaprak döküyor"]):
+        response = (
+            "**Kök Neden:** Yaprak solması ve kuruma üç farklı mekanizma ile gerçekleşir: "
+            "Su stresi (köklerin su alamadığı durum), vasküler tıkanma (Fusarium, Verticillium "
+            "gibi iletim doku hastalıkları) veya aşırı sulama kaynaklı kök çürüklüğü. "
+            "Paradoks gibi görünse de hem su eksikliği hem fazlalığı aynı solgunluk belirtisini verebilir.\n\n"
+            "**Teşhis ve Müdahale:**\n"
+            "1. Toprağa 10 cm gidin: Nemli ama bitki hâlâ solgunsa → Kök çürüklüğü (Phytophthora/Pythium).\n"
+            "   Müdahale: Fosetil-Al (Aliette 80 WP, 3 g/L, sulama yoluyla) + drenaj iyileştirin.\n"
+            "2. Gövde kesitini inceleyin: Kahverengi vasküler doku varsa → Fusarium veya Verticillium.\n"
+            "   Müdahale: Toprağa Trichoderma biyofungisit karıştırın; kimyasal çözüm sınırlıdır.\n"
+            "3. Toprak kuru ve bitki solgunsa → Su stresi → Derin sulama yapın, toprağa mulç serin.\n\n"
+            "**Hava Uyarısı:** Yaz sıcağında (35°C+) öğleden sonra stomaların kapanması "
+            "normal fizyolojik solgunluktur — akşam serinlediğinde bitki toparlanıyorsa ciddi sorun yoktur. "
+            "Akşamüstü de toparlanma olmuyorsa müdahale gereklidir.\n\n"
+            "**Önleyici Bakım:** Drene olmayan, su tutan tarlalarda yükseltilmiş yatak (raised bed) "
+            "yöntemi kök hastalıklarını dramatik şekilde azaltır. Damlama sulama + nem sensörü en "
+            "etkili uzun vadeli çözümdür."
         )
     elif any(k in msg for k in ["mantar", "fungus", "küf", "çürük", "leke"]):
         response = (
-            "Mantari hastalıklar genellikle yüksek nem ve yetersiz hava sirkülasyonu ortamında gelişir. "
-            "Bakır veya kükürt bazlı fungisitler geniş spektrumlu koruma sağlar. "
-            "İlaçlamayı sabah erken veya akşam yapın; öğle güneşinde uygulama yaprak yanıklığına yol açabilir. "
-            "Hastalıklı bitki artıklarını tarlada bırakmayın."
+            "**Kök Neden:** Mantari hastalıklar yüksek nem (%80+), sıcaklık dalgalanmaları ve "
+            "yetersiz hava sirkülasyonu ile hızla yayılır. Bitki artıkları ve toprağın yüzey katmanı "
+            "sporların kışlama yeridir; bir sezon görülen mantar hastalığı sonraki yıl da tekrarlama "
+            "eğilimindedir.\n\n"
+            "**Genel Fungisit Protokolü:**\n"
+            "1. Koruyucu (kontakt): Bakır oksiklorür %50 WP (3 g/L) veya Mankozeb 80 WP (2.5 g/L), 10-14 günde bir.\n"
+            "2. Tedavi edici (sistemik): Triazol grubu (tebukonazol, propikonazol, epoksikonazol) — hastalık ortaya çıktıktan sonra.\n"
+            "3. Strobilurin grubu (azoksistrobin, kresoksim-metil) — hem koruyucu hem tedavi edici.\n"
+            "4. Direnç yönetimi: Aynı etken maddeyi ardarda en fazla 2-3 kez kullanın, sonra değiştirin.\n\n"
+            "**Hava Uyarısı:** Sabah çiyi çok olan dönemlerde (nem>90%) uygulama sıklığını artırın. "
+            "Güneşli öğle vakti özellikle bakır bileşiklerini uygulamayın — fitotoksisite riski vardır. "
+            "Yağmur tahmininde sistematik fungisit, kuru havalarda kontakt fungisit tercih edin.\n\n"
+            "**Önleyici Bakım:** Hasat sonrası tüm bitki artıklarını yakın veya derin gömün. "
+            "Sezon başı toprağa iyice yanmış ahır gübresi karıştırmak mikrobiyal çeşitlilik sağlar "
+            "ve doğal baskı mekanizmalarını aktive eder."
         )
-    elif any(k in msg for k in ["ilaç", "ilaçlama", "sprey", "fungisit", "pestisit", "zirai mücadele"]):
+    elif any(k in msg for k in ["ilaç", "ilaçlama", "sprey", "fungisit", "pestisit", "zirai mücadele", "doz", "dozaj"]):
         response = (
-            "İlaçlama yaparken etken maddeyi döngüsel değiştirin (direnç gelişimini önler). "
-            "Yaprak altlarına da ulaşacak şekilde spreyi her iki yüzeyden uygulayın. "
-            "İlaçlama sonrası hasat için bekleme süresine (antidot süresi) mutlaka uyun. "
-            "Rüzgarlı veya yağmur beklenen günlerde ilaçlama yapmayın."
+            "**Kök Neden ve Temel İlkeler:** İlaçlama, en son başvurulması gereken araçtır; "
+            "kültürel önlemler (budama, ekim nöbeti, dayanıklı çeşit) her zaman önce gelir. "
+            "Yanlış ilaçlama hem etkisizdir hem de ilaç direnci gelişimine yol açar.\n\n"
+            "**Doğru İlaçlama Protokolü:**\n"
+            "1. Teşhis önce gelir: Hangi hastalık/zararlı? Görsel veya laborant analizi yapın.\n"
+            "2. Etken madde seçimi: Hastalığa spesifik; geniş spektrumlu kullanımı sınırlayın.\n"
+            "3. Doz hesabı: Etiket dozu aşmayın (tolerans oluşur); yetersiz doz da etkisiz kalır.\n"
+            "4. Uygulama zamanı: Sabah 06:00-09:00 veya akşam 17:00-20:00 — hem bitki hem insan için güvenli.\n"
+            "5. Spreyi her iki yüzeyden uygulayın: Yaprak altlarını atlamak etkinliği %50 düşürür.\n\n"
+            "**Hava Uyarısı:** Rüzgar > 3 m/s, sıcaklık > 30°C, yağmur beklentisi 4 saaten kısa "
+            "olan günlerde ilaçlama yapmayın. Yağmur hemen sonrası temas fungisitini yenileyin (%50 "
+            "yıkanma olur), sistematik fungisit daha dirençlidir (48 saat sonra yağmur olsa bile çalışır).\n\n"
+            "**Önleyici Bakım:** İlaç direnç yönetimi için 'FRAC kodu' farklı ilaçları dönüşümlü "
+            "kullanın. Hasat öncesi 'pre-harvest interval' (PHI) süresine kesinlikle uyun; "
+            "bu hem yasal zorunluluk hem de gıda güvenliği açısından kritiktir."
         )
-    elif any(k in msg for k in ["sıcaklık", "hava", "iklim", "don", "soğuk", "sıcak", "kuraklık"]):
+    elif any(k in msg for k in ["sıcaklık", "hava durumu", "iklim", "don", "soğuk", "sıcak", "kuraklık", "yağmur"]):
         response = (
-            "Hava koşulları bitki sağlığını doğrudan etkiler. Don riski olan gecelerde hassas bitkileri "
-            "tülle örtün. 35°C üzeri sıcaklıklarda gölgeleme yapın ve sabah sulayın. "
-            "Kuraklık dönemlerinde mulç (saman veya örtü) kullanmak toprak nemini %30 koruyabilir."
+            "**Kök Neden:** Hava koşulları bitki fizyolojisini doğrudan belirler. Bitkilerin "
+            "her gelişim aşaması için farklı sıcaklık optimumları vardır; bu aralığın dışına çıkıldığında "
+            "büyüme yavaşlar, hastalık direnci düşer ve verim kayıpları başlar.\n\n"
+            "**Kritik Sıcaklık Eşikleri ve Müdahale:**\n"
+            "1. Don riski (< 2°C gece): Hassas sebzeleri %30-50 agro-tekstil tülle örtün; "
+            "sulama yapın (don öncesi nemli toprak ısıyı tutar). Kalsiyum nitrat yaprak gübresi don direncini artırır.\n"
+            "2. Yüksek sıcaklık (> 35°C): Sabah sulayın, gölgeleme (%30-50 şadör) uygulayın, "
+            "çiçeklenme döneminde serin saatlerde tozlaşma gerçekleşmez — verim düşer.\n"
+            "3. Kuraklık: Mulç (saman, plastik) toprağa yayın — buharlaşmayı %30 azaltır. "
+            "Damla sulama geçiş yapın.\n"
+            "4. Aşırı yağış: Drenaj kanallarını temizleyin; su basan tarla kök çürüklüğüne davetiye çıkarır.\n\n"
+            "**Mevsimsel Uyarı:** İlkbahar geçişinde geç don ('çiçek donu') çok tehlikelidir — "
+            "Nisan-Mayıs aylarında gece tahminlerini takip edin. Ege ve Akdeniz'de olgunlaşma dönemindeki "
+            "yüksek sıcaklık+ düşük nem kombinasyonu meyve yanıklığına yol açar; bu dönemde "
+            "sulama programını gözden geçirin.\n\n"
+            "**Önleyici Bakım:** Bitki su stres toleransını artırmak için potasyum (K) ağırlıklı gübre "
+            "kullanın. Silikat bazlı gübreler (monosilisik asit) hem don hem sıcaklık stresine karşı "
+            "hücre duvarını güçlendirir; 15 günde bir yaprak gübresi olarak verilebilir."
         )
-    elif any(k in msg for k in ["verim", "mahsul", "hasat", "üretim", "ürün"]):
+    elif any(k in msg for k in ["verim", "mahsul", "hasat", "üretim", "ürün miktarı"]):
         response = (
-            "Verim artırmak için dört temel: doğru çeşit seçimi, dengeli gübreleme, düzenli sulama ve "
-            "zamanında hastalık kontrolü. Çiçeklenme öncesi Fosfor (P) verimi doğrudan artırır. "
-            "Aşırı azot ise fazla yeşil aksama neden olarak meyve verimini düşürebilir."
+            "**Kök Neden:** Verim düşüşlerinin arkasında çoğunlukla birden fazla etken birlikte rol oynar: "
+            "Yetersiz gübreleme, sulama hataları, hastalık baskısı ve genetik (yanlış çeşit seçimi). "
+            "Tek bir faktörü düzeltmek yeterli olmuyor; verim artışı için sistem bütüncül ele alınmalı.\n\n"
+            "**Verim Artışı İçin 5 Adım:**\n"
+            "1. Toprak analizi: Her 3 yılda bir laboratuvar analizi — hangi besin ne kadar eksik, bunu bilin.\n"
+            "2. Çeşit seçimi: Bölgenize uygun, hastalık toleranslı, verimi kanıtlanmış çeşit kullanın.\n"
+            "3. Gübreleme programı: NPK + mikro element dengesi. Çiçeklenme öncesi fosfor (P) en kritik.\n"
+            "4. Sulama optimizasyonu: Damla sulama ile %20-40 daha az su, %15-25 daha yüksek verim.\n"
+            "5. Hastalık kontrolü: Erken teşhis + zamanında müdahale — geç kalınan her gün verim kaybı demek.\n\n"
+            "**Hava ve Mevsim Uyarısı:** Çiçeklenme döneminde sıcaklık >35°C veya <10°C olursa "
+            "tozlaşma gerçekleşmez, meyve bağlama olmaz. Bu dönemlerde bor (B) + gibberellin "
+            "yaprak gübresi çiçek dökülmesini azaltır.\n\n"
+            "**Önleyici Bakım:** Verim hedeflerini gerçekçi belirleyin — bir tarlanın 'potansiyel verimi' "
+            "çeşit kataloğundaki maksimum değerdir; saha koşullarında bu değerin %60-70'i çok başarılı "
+            "sayılır. Her yıl sonunda tarım günlüğü tutun: sıcaklık, yağış, hastalık, gübre, verim "
+            "notları gelecek yılın planlamasına ışık tutar."
         )
-    elif any(k in msg for k in ["toprak", "ph", "kireç", "kalsiyum", "magnezyum", "asit"]):
+    elif any(k in msg for k in ["toprak", "ph", "kireç", "asit", "toprak analizi", "kalsiyum", "magnezyum"]):
         response = (
-            "Çoğu sebze için ideal toprak pH'ı 6.0–7.0 arasındadır. Asit topraklar (pH<6) için kireç, "
-            "alkali topraklar (pH>7.5) için kükürt uygulayın. Magnezyum eksikliği yaprak damarları "
-            "yeşil kalırken arası sararan 'klorozis' görünümü verir; MgSO4 (Epsom tuzu) ile giderin."
+            "**Kök Neden:** Toprak pH'ı bitkilerin besin alabileceği bir 'pencere' belirler. "
+            "Bu pencere dışına çıkıldığında (pH<6.0 veya pH>7.5) bazı besinler kimyasal olarak "
+            "toprakta kilitlenir ve kök tarafından alınamaz hale gelir. Yani gübre verseniz bile "
+            "bitki kullanamayabilir.\n\n"
+            "**pH Düzeltme Protokolü:**\n"
+            "1. Asit toprak (pH < 6.0): Kireç (kalsit veya dolomit) uygulayın. Doz: pH'ı 0.5 birim "
+            "artırmak için yaklaşık 200-300 kg/da. Sonbahar aylarında toprağa karıştırın.\n"
+            "2. Alkali toprak (pH > 7.5): Toz kükürt veya asit etkili gübre (amonyum sülfat) kullanın. "
+            "Doz: 50-100 kg/da toz kükürt, yavaş etkilidir (2-3 ay).\n"
+            "3. Hızlı düzeltme gerekiyorsa: Asit pH'lı damla sulama (%1 asetik asit veya sülfirik asit).\n\n"
+            "**Eksiklik Tablo:**\n"
+            "- Kalsiyum (Ca) eksikliği: Domates/biberinde çiçek dip çürüklüğü → Kalsiyum nitrat, 2 g/L.\n"
+            "- Magnezyum (Mg) eksikliği: Yaprak içi sarı, damar yeşil (klorozis) → Epsom tuzu, 5 g/L.\n"
+            "- Bor (B) eksikliği: Tomurcuk çürüklüğü, deforme meyve → Borax, 0.5 g/L yaprak gübresi.\n\n"
+            "**Önleyici Bakım:** Toprak analizi en ucuz ve en değerli zirai yatırımdır. "
+            "Her 3 yılda bir İl Tarım Müdürlüğü laboratuvarlarında veya özel laboratuvarlarda "
+            "yaptırın. Organik madde oranını artırmak (kompost, yeşil gübre) toprak tampon kapasitesini "
+            "yükselterek pH'ı uzun vadede dengeler."
         )
-    elif any(k in msg for k in ["bitki", "nedir", "ne ekmeliyim", "hangi bitki", "öneri"]):
+    elif any(k in msg for k in ["ekim", "tohum", "dikim", "ne ekeyim", "ne zaman ekim", "mevsim"]):
         response = (
-            "Hangi bitkiyi yetiştireceğinize karar verirken bölgenizin iklimini, toprağınızı ve "
-            "pazar talebini göz önüne alın. İlkbaharda domates, biber, patlıcan; "
-            "yazın mısır ve kabak; sonbaharda ıspanak, lahana ve havuç iyi seçeneklerdir. "
-            "Daha spesifik öneri için bölgenizi ve ekim tarihini belirtebilir misiniz?"
+            "**Kök Neden:** Doğru ekim zamanı; bitkinin çimlenme sıcaklığı, son don tarihi ve "
+            "pazara çıkış hedefi baz alınarak belirlenir. Erken ekim don zararına, geç ekim ise "
+            "hasadın sıcaklık stresli döneme denk gelmesine yol açar.\n\n"
+            "**Mevsime Göre Ekim Takvimi (Türkiye Genel):**\n"
+            "1. İlkbahar (Mart-Mayıs): Domates, biber, patlıcan (fide ile), mısır, kabak, salatalık.\n"
+            "2. Yaz (Haziran-Temmuz): İkinci ürün mısır (Güney), yazlık fasulye, susam.\n"
+            "3. Sonbahar (Ağustos-Ekim): Soğan, sarımsak, ıspanak, lahana, brokoli, havuç.\n"
+            "4. Kış (Kasım-Şubat): Hububat (buğday, arpa), baklagiller (nohut, mercimek — soğuğa dayanıklı).\n\n"
+            "**Bölgesel Uyarı:** Karadeniz'de geç ilkbahar donları nedeniyle dış ekim takvimini "
+            "İç Anadolu'dan 2-3 hafta öne alın. Akdeniz ve Ege'de ise tüm yıl boyunca "
+            "farklı ürünler yetiştirmek mümkündür; güz dönemi sebzeciliği çok karlıdır.\n\n"
+            "**Önleyici Bakım:** Her ekimden önce toprağı 20-25 cm derin sürün ve havalandırın. "
+            "Sertifikalı, hastalık ilaçlaması yapılmış, bölge iklim koşullarına uygun "
+            "tescilli çeşit seçin. Tohumluk depolarken nem < %12, sıcaklık < 15°C sağlayın."
         )
-    elif "merhaba" in msg or "selam" in msg or "naber" in msg or "hey" in msg:
+    elif any(k in msg for k in ["böcek", "zararlı", "haşere", "yaprak biti", "tripis", "kırmızı örümcek", "akar", "tırtıl"]):
         response = (
-            "Merhaba! Ben Tarla Asistanın. Bitkileriniz, hastalıklar, sulama, gübreleme veya "
-            "ekim hakkında her şeyi sorabilirsiniz. Fotoğraf yükleyerek analiz de yaptırabilirsiniz. "
-            "Nasıl yardımcı olabilirim?"
+            "**Kök Neden:** Zararlı böcekler genellikle kimyasal ilaçlamalar sonrası doğal düşmanları "
+            "ortadan kalkınca hızla çoğalır (sekonder patlama). Monokültür tarım (tek ürün), "
+            "aşırı azot gübrelemesi ve güneşli-sıcak koşullar birçok zararlının üremesini hızlandırır.\n\n"
+            "**Yaygın Zararlı ve Müdahale:**\n"
+            "1. Yaprak biti (Aphididae): Yaprak altında yoğun koloniler, yapışkan salgı → "
+            "Neem yağı (%2, 5 ml/L), imidacloprid (0.5 ml/L) veya doğal düşman: uğur böceği bırakın.\n"
+            "2. Kırmızı örümcek (Tetranychus): İnce ağ, soluk-bronz yaprak → Abamektin (1 ml/L) + "
+            "kükürt (kış aylarında yumurta ilaçlaması).\n"
+            "3. Thrips: Gümüşi çizgiler, pörtlek meyve → Spinosad (Tracer 0.4 ml/L) — hasat öncesi 3 gün.\n"
+            "4. Tırtıl (Lepidoptera): Yaprak delikler, dışkı izleri → Bacillus thuringiensis (Bt) — "
+            "biyolojik, güvenli, sık uygulama gerekir.\n\n"
+            "**Hava Uyarısı:** Kırmızı örümcek sıcak ve kuru koşullarda (>30°C, nem<%40) patlar — "
+            "damla sulamayla çevreyi nemlendirmek populasyonu baskılar. Yaprak biti ise ilkbaharda "
+            "azotlu gübre fazlalığıyla tetiklenir; dengeli gübreleme koruyucudur.\n\n"
+            "**Önleyici Bakım:** Ekim nöbeti zararlı populasyonlarını kırar. Tarla kenarlarında "
+            "çiçekli bitki şeridi bırakmak doğal düşmanları çeker. Sarı ve mavi yapışkan tuzaklar "
+            "hem izleme hem de doğrudan kontrolde etkilidir."
+        )
+    elif "merhaba" in msg or "selam" in msg or "naber" in msg or "hey" in msg or "günaydın" in msg:
+        response = (
+            "Merhaba! Ben 20 yıllık saha deneyimi olan bir Türk ziraat mühendisiyim. "
+            "Bitkilerinizin hastalıkları, sulama programı, gübreleme takvimi, zararlı mücadelesi "
+            "veya ne ekmeniz gerektiği konusunda detaylı rehberlik alabileceğiniz doğru yerdesiniz.\n\n"
+            "Size nasıl yardımcı olabilirim? İsterseniz:\n"
+            "• Hastalık belirtisi anlatın → Teşhis ve tedavi planı sunayım\n"
+            "• Bitki türünüzü söyleyin → Sezona özel bakım tavsiyeleri vereyim\n"
+            "• Fotoğraf yükleyin → AI görsel analizi yapsın, ben yorumlayayım\n\n"
+            "Bölgenizi ve yetiştirdiğiniz ürünleri belirtirseniz çok daha spesifik önerilerde bulunabilirim."
         )
     else:
-        fallbacks = [
-            "Bu durum için kesin bir şey söylemek zor. En doğru bilgiyi verebilmem için bitkinizin bir fotoğrafını 'Tahlil' kısmından yüklemenizi öneririm. Genel olarak bitkinizin havalandırmasını artırmak ve nem dengesini korumak faydalıdır.",
-            "Anlıyorum. Tarımda her bitkinin tepkisi farklı olabilir. Eğer hastalık şüpheniz varsa, kamerayı açıp analiz yaptırmanız en garantili yoldur. Ayrıca toprağın pH dengesini kontrol etmek her zaman iyi bir fikirdir.",
-            "Sorduğunuz konu tarımda dikkat edilmesi gereken bir detay. Hava koşulları ve bölgenizin iklimi bu durumu etkileyebilir. Spesifik bir hastalık sorunu yaşıyorsanız, lütfen yaprak fotoğrafını taratın.",
-            "Bu konuda size net bir öneri sunabilmem için bitkinin fiziksel durumunu görmem harika olurdu. Fotoğraf yükleyebilir misiniz? O zamana kadar bitkiyi strese sokmamak adına aşırı sulamadan kaçının."
+        fallback_responses = [
+            (
+                "Sorunuzu anlamaya çalışıyorum. Tarımda her durum bitkiye, bölgeye ve mevsime göre "
+                "farklı sonuçlar doğurabilir. Size en doğru tavsiyeyi verebilmem için birkaç soru "
+                "sormam gerekiyor: Hangi bitkiden bahsediyoruz? Bölgeniz neresi ve şu an hangi "
+                "gelişim evresinde? Bu bilgilerle somut öneri sunabilirim.\n\n"
+                "Genel bir öneri olarak: Bitki stresini azaltmak için sulama düzenliliğini kontrol edin, "
+                "aşırı azot gübrelemesinden kaçının ve bitki artıklarını tarla içinde bırakmayın. "
+                "Şüphelendiğiniz bir hastalık varsa fotoğraf yükleyerek AI analizinden yararlanabilirsiniz."
+            ),
+            (
+                "Bu konu hakkında daha ayrıntılı bilgi vermek isterim. Ancak önce birkaç detaya "
+                "ihtiyacım var: Sorunu hangi bitkide gözlemlediniz? Belirtiler ne zamandan beri var? "
+                "İlk olarak yaprak mı, gövde mi yoksa meyve mi etkilendi?\n\n"
+                "Bu bilgiler olmadan genel bir kural olarak şunu söyleyebilirim: Bir bitki sorununuz "
+                "olduğunda ilk adım doğru teşhis koymaktır. Yaprak fotoğrafı yükleyerek AI analizi "
+                "yaptırmanız, sistematik teşhis sürecini hızlandırır ve benim de daha spesifik "
+                "müdahale önerisi sunmamı sağlar."
+            ),
         ]
-        response = random.choice(fallbacks)
+        import random
+        response = random.choice(fallback_responses)
 
     return ChatResponse(
         success=True,
         response=response,
         message="AI asistanı yanıtı başarıyla oluşturdu."
+    )
+
+
+# =============================================================================
+# Endpoint 6: POST /ai/chat-analyze  (Fotoğraflı Sohbet)
+# =============================================================================
+
+@router.post(
+    "/chat-analyze",
+    response_model=ChatResponse,
+    summary="Fotoğraf yükleyerek zirai asistanla sohbet et",
+    description=(
+        "Kullanıcının yüklediği bitki fotoğrafını analiz edip "
+        "hastalık tespiti yapar ve bağlamsal bir zirai tavsiye üretir."
+    )
+)
+async def ai_chat_analyze_endpoint(
+    file: UploadFile = File(..., description="Analiz edilecek bitki görseli (JPG, PNG)."),
+    message: str = Form("", description="Kullanıcının ek sorusu veya notu (opsiyonel)."),
+) -> ChatResponse:
+    """
+    Fotoğraf + opsiyonel metin mesajı alır.
+    1. Görseli YOLO + EfficientNet pipeline'ından geçirir.
+    2. Hastalık tespitini ve güven skorunu bağlamsal cevaba ekler.
+    3. ChatResponse olarak döndürür.
+    """
+    try:
+        image_bytes = await file.read()
+        if not image_bytes:
+            return ChatResponse(
+                success=False,
+                response="Yüklenen dosya boş. Lütfen geçerli bir bitki fotoğrafı gönderin.",
+                message="Boş dosya hatası."
+            )
+    except Exception as exc:
+        logger.error(f"chat-analyze dosya okuma hatası: {exc}")
+        return ChatResponse(
+            success=False,
+            response="Fotoğraf okunamadı. Lütfen tekrar deneyin.",
+            message="Dosya okuma hatası."
+        )
+
+    detected_disease: str | None = None
+    confidence_val: float | None = None
+
+    # --- YOLO + EfficientNet pipeline (model yoksa fallback) ---
+    if model_store.is_loaded:
+        try:
+            yolo_result = detect_leaf(
+                image_bytes=image_bytes,
+                yolo_model=model_store.yolo,
+                confidence_threshold=0.25,
+            )
+            cropped_b64 = yolo_result.get("cropped_leaf_base64")
+
+            if cropped_b64:
+                clf_result = classify_disease(
+                    cropped_leaf_base64=cropped_b64,
+                    efficientnet_model=model_store.efficientnet,
+                    class_names=model_store.class_names,
+                    device=model_store.device,
+                )
+                detected_disease = clf_result.get("predicted_class")
+                confidence_val = clf_result.get("confidence")
+        except Exception as exc:
+            logger.warning(f"chat-analyze pipeline hatası (devam ediliyor): {exc}")
+    else:
+        logger.info("chat-analyze: modeller yüklü değil, metinsel yanıt dönülüyor.")
+
+    # --- Bağlamsal yanıt oluştur ---
+    user_note = message.strip() if message.strip() else None
+
+    if detected_disease and confidence_val is not None:
+        conf_pct = round(confidence_val * 100, 1)
+        is_healthy = detected_disease.lower() in ("healthy", "sağlıklı")
+
+        if is_healthy:
+            response_text = (
+                f"Fotoğrafınızı inceledim. Güzel haber: AI sistemi bitkinin sağlıklı göründüğünü "
+                f"tespit etti (%{conf_pct} güven). Yapraklarda belirgin bir hastalık belirtisi bulamadım.\n\n"
+                "**Mevcut Durumun Korunması İçin Öneriler:**\n"
+                "1. Sulama düzeninizi koruyun; toprak yüzeyi kurumaya başlamadan sulayın.\n"
+                "2. Hava sirkülasyonunu artırmak için bitkiler arası mesafeyi muhafaza edin.\n"
+                "3. Alt yaprak budaması (kaçakçı alma) toprak sıçramasından kaynaklanan mantari "
+                "enfeksiyonları önler.\n"
+                "4. 2 haftada bir koruyucu bakır oksiklorür uygulaması sezona göre tavsiye edilir.\n\n"
+                "**Önleyici Bakım:** Bitkinin sağlıklı görünmesi, içten ilerleyen vasküler hastalıkları "
+                "dışlamaz. Gövde dibini ve kök boğazını da zaman zaman kontrol edin. "
+                "Herhangi bir renk değişimi veya solgunluk fark ederseniz hemen bildirim yapın."
+            )
+        else:
+            response_text = (
+                f"Fotoğrafınızı analiz ettim. **{detected_disease}** tespit edildi "
+                f"(güven oranı: %{conf_pct}).\n\n"
+                f"**Kök Neden:** {detected_disease} hastalığı genellikle yüksek nem, yetersiz hava "
+                "sirkülasyonu ve zayıflamış bitki bağışıklığının bir araya gelmesiyle ortaya çıkar. "
+                "Sporlar veya bakteriler komşu bitkilerden, sulama suyundan veya topraktan taşınıyor olabilir.\n\n"
+                "**Acil Müdahale Adımları:**\n"
+                "1. Belirgin şekilde enfekte olmuş yaprakları hemen kesin ve imha edin (kompost yapmayın).\n"
+                "2. Bakır oksiklorür %50 WP (3 g/L) veya hastalığa özgü fungisit uygulamaya başlayın.\n"
+                "3. Sulama yöntemini gözden geçirin — yaprakları ıslatmayın, damlama tercih edin.\n"
+                "4. 7-10 gün sonra tekrar fotoğraf çekerek iyileşme takip edin.\n\n"
+                "**Hava Uyarısı:** İlaçlamayı sabah erken (06:00-09:00) veya akşamüstü (17:00-20:00) "
+                "yapın. Yağmur beklentisi varsa sistematik (içten etkili) fungisit tercih edin.\n\n"
+                "**Önleyici Bakım:** Hastalığın tekrarlamaması için ekim nöbeti planlayın ve "
+                "sezon başında biyofungisit (Trichoderma harzianum) uygulaması yapın."
+            )
+
+        if user_note:
+            response_text += (
+                f"\n\n**Notunuz hakkında:** '{user_note}' — "
+                "Bu ek bilgiyi göz önünde bulundurarak öneri güncellemeleri için sohbete devam etmenizi öneririm."
+            )
+    else:
+        # Model yüklü değil veya tespit yapılamadı
+        if user_note:
+            response_text = (
+                f"Fotoğrafınızı aldım ancak otomatik analiz şu an tamamlanamadı. "
+                f"Notunuzu gördüm: '{user_note}'.\n\n"
+                "Yaprak üzerindeki belirtileri bana yazılı olarak tarif ederseniz "
+                "(renk, boyut, konumu, ne zaman başladığı) size zirai deneyimime dayanarak "
+                "detaylı tavsiye sunabilirim. Alternatif olarak backend'in tam çalışır hale "
+                "gelmesi beklenebilir ve tekrar yüklenebilir."
+            )
+        else:
+            response_text = (
+                "Fotoğrafınızı aldım. Otomatik AI analizi şu an yapılamadı. "
+                "Lütfen yaprak üzerinde gördüğünüz belirtileri yazılı tarif edin: "
+                "renk değişimi mi, leke mi, kuruma mı, sararmış mı, küf mi? "
+                "Bu bilgilerle size doğru teşhis ve tedavi önereceğim."
+            )
+
+    return ChatResponse(
+        success=True,
+        response=response_text,
+        detected_disease=detected_disease,
+        confidence=confidence_val,
+        message="Fotoğraf analizi tamamlandı."
     )
