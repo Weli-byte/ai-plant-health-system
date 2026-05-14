@@ -373,69 +373,73 @@ def _detect_mime_type(image_bytes: bytes) -> str:
 
 
 _VISION_PROMPT = """\
-Bu yaprak fotoğrafını bir ziraat fakültesi mezunu, 25 yıllık saha deneyimine sahip uzman ziraat mühendisi gözüyle analiz et.
+Bu yaprak/bitki fotoğrafını bir ziraat fakültesi mezunu, 25 yıllık saha deneyimine sahip uzman ziraat mühendisi gözüyle analiz et.
+Fotoğraftaki bitkiyi dikkatle incele: renk değişiklikleri, lekeler, nekrotik bölgeler, toz/küf örtüsü, böcek izleri, su stresi belirtileri veya sağlıklı görünüm. Gerçek gözlemlerine dayanarak analiz yap — şablona bağlı kalma.
 Tüm Türkçe metinleri uzman bilimsel dilde yaz — teknik terminoloji, latince tür adları, fizyopatolojik süreçler kullan.
-Yalnızca aşağıdaki JSON nesnesini döndür — başka hiçbir metin, açıklama veya markdown ekleme:
+Yalnızca aşağıdaki JSON şemasını doldurarak döndür — başka hiçbir metin, açıklama veya markdown ekleme:
 
 {
-  "disease_name_tr": "Külleme (Erysiphe spp.)",
-  "disease_name_en": "Powdery Mildew",
-  "confidence_score": 87,
-  "risk_level": 3,
-  "current_stage": "Evre 2 — Konidiofor oluşumu aktif",
-  "spread_risk": "high",
-  "spread_speed": "fast",
-  "description": "Erysiphe cichoracearum obligat bir ektoparazit olup yalnızca canlı bitki epidermal hücrelerinde koloni oluşturur. Yaprak yüzeyinde beyaz-gri konidiofor tabakası belirginleşmiş, aseksüel üreme döngüsü devrededir.",
-  "pathogen_type": "fungal",
-  "affected_parts": ["Adaksial yaprak yüzeyi", "Sürgün uçları", "Çiçek taç yaprakları"],
-  "estimated_timeline": "Optimal koşullarda (20-25°C, %60-80 RH) 5-7 günde ikincil enfeksiyonlar gelişir",
-  "healthy_percentage": 35,
-  "affected_percentage": 65,
-  "severity_distribution": "Yaprak merkezi ve damar bölgelerinde yoğun sporlanma, kenarlara doğru azalıyor",
+  "disease_name_tr": "<fotoğraftaki gerçek hastalık/durum adı Türkçe>",
+  "disease_name_en": "<hastalık adı İngilizce>",
+  "confidence_score": <fotoğrafa özgü 0-100 güven skoru>,
+  "risk_level": <1-5: 1=sağlıklı, 2=takip et, 3=dikkat, 4=yüksek risk, 5=acil>,
+  "current_stage": "<gözlemlenen mevcut hastalık evresi>",
+  "spread_risk": "<low|medium|high>",
+  "spread_speed": "<slow|medium|fast|none>",
+  "description": "<fotoğraftaki spesifik belirtilerin bilimsel açıklaması>",
+  "pathogen_type": "<fungal|bacterial|viral|pest|none>",
+  "affected_parts": ["<fotoğrafta etkilenen spesifik bölgeler>"],
+  "estimated_timeline": "<bu fotoğraftaki durumun tahmini seyri>",
+  "healthy_percentage": <fotoğraftaki sağlıklı alan yüzdesi 0-100>,
+  "affected_percentage": <fotoğraftaki etkilenen alan yüzdesi 0-100>,
+  "severity_distribution": "<fotoğraftaki hastalık dağılım deseni>",
   "hotspot_regions": [
-    {"x_percent": 45, "y_percent": 38, "radius_percent": 20, "intensity": 0.92, "label": "Primer konidiofor kolonisi"},
-    {"x_percent": 68, "y_percent": 62, "radius_percent": 13, "intensity": 0.65, "label": "İkincil enfeksiyon odağı"}
+    {
+      "x_percent": <sol=0, sağ=100>,
+      "y_percent": <üst=0, alt=100>,
+      "radius_percent": <5-30>,
+      "intensity": <0.1-1.0>,
+      "label": "<bu odak noktasının tanımı>"
+    }
   ],
   "treatment_products": [
     {
-      "name": "Thiovit Jet 80 WG",
-      "active_ingredient": "Kükürt (%80 WG)",
-      "dose": "200-300 g / 100 L su",
-      "timing": "Sabah 08:00 öncesi veya akşam serinliğinde",
-      "frequency": "7-10 günde bir, max 6 uygulama",
-      "price_range_tl": "150-250 TL/kg"
+      "name": "<ticari ürün adı>",
+      "active_ingredient": "<etken madde ve konsantrasyon>",
+      "dose": "<uygulama dozu>",
+      "timing": "<uygulama zamanlaması>",
+      "frequency": "<tekrar sıklığı>",
+      "price_range_tl": "<yaklaşık TL fiyat aralığı>"
     }
   ],
-  "cultural_measures": [
-    "Enfekte yaprak dokularını imha edin — kompost yapmayın",
-    "Bitki arası mesafeyi artırarak hava sirkülasyonunu iyileştirin"
-  ],
-  "prognosis_with_treatment": "Erken sistemik fungisit müdahalesi ile 10-14 günde sporlanma baskılanır",
-  "prognosis_without_treatment": "Sekonder enfeksiyonlar 7-10 günde tüm sürgünlere yayılır, klorofil sentezi bozulur",
-  "harvest_impact": "Erken müdahale ile kayıp %10 altında tutulabilir; geç müdahalede %30-50 verim ve kalite kaybı",
-  "next_season_prevention": "Hasat sonrası bitki artıklarını imha edin. İlkbahar başında kükürt bazlı koruyucu uygulama yapın",
+  "cultural_measures": ["<kültürel önlem 1>", "<kültürel önlem 2>"],
+  "prognosis_with_treatment": "<tedavi uygulandığında beklenen sonuç>",
+  "prognosis_without_treatment": "<tedavi uygulanmazsa beklenen sonuç>",
+  "harvest_impact": "<hasat üzerindeki ekonomik etki>",
+  "next_season_prevention": "<gelecek sezon önleme stratejisi>",
   "expert_analysis": {
-    "biology": "Erysiphe spp. obligat bir biyotrof parazit olup haustoria ile konakçı hücrelerden besin alır; aseksüel döngüde zincirleme konidiler (basionym: Oidium) rüzgarla yayılır, cinsel döngüde kleistotesyum içindeki askosporlar kışı geçirir.",
-    "spread_mechanism": "Primer inokulüm kleistotesyumlardan salınan askosporlardan kaynaklanır; sekonder yayılım konidia aracılığıyla rüzgar ve temasla gerçekleşir, kuru hava sporlara avantaj sağlar.",
-    "environmental_conditions": "20-27°C sıcaklık ve %50-80 bağıl nem optimum gelişim koşullarıdır; yüksek azot gübrelemesi ve gölge koşulları konakçı hassasiyetini artırır.",
-    "economic_impact": "Külleme, dünya genelinde tahıl ve sebzelerde yıllık %10-40 verim kaybına yol açar; Türkiye elma bahçelerinde tedavisiz vakalarda %50 pazar değeri kaybı bildirilmiştir.",
-    "diagnosis_certainty": "Tipik unlu beyaz misel örtüsü ve konidiofor morfolojisi göz önünde bulundurulduğunda teşhis %90+ güvenilirlikte; Botrytis cinerea ile erken aşama karışıklığı mümkün olup mikroskobik incelemeyle ayrılır.",
-    "similar_diseases": "Botrytis cinerea (gri küf): daha koyu, pamuksu görünüm; Phytophthora: alt yaprak yüzeyinde, ıslak dokularda; Eriofid akarları: gümüşi renk değişikliği ama misel yok.",
-    "treatment_protocol": "1) Hastalıklı sürgünleri kesin ve imha edin. 2) Kükürt bazlı koruyucu fungisit uygulayın (7 gün aralık). 3) Hastalık devam ederse DMI (triazol) grubu sistemik fungisit ile rotasyon yapın. 4) PHI sürelerine uyun.",
-    "organic_alternatives": "Süt serumu (%20 seyreltilmiş), sodyum bikarbonat çözeltisi (%0.5), Bacillus subtilis preparatları (Serenade), tatlı turunçgil yağ bazlı ürünler (Prev-Am) organik sertifikalı bahçelerde uygulanabilir.",
-    "resistance_management": "Aynı etki mekanizmalı (FRAC grubu) fungisitleri art arda kullanmaktan kaçının; kükürt → triazol → strobilurin rotasyonu uygulayın; ilaç seyreltmesine kesinlikle dikkat edin."
+    "biology": "<patojein biyolojisi ve yaşam döngüsü>",
+    "spread_mechanism": "<yayılma mekanizması>",
+    "environmental_conditions": "<tetikleyici çevresel koşullar>",
+    "economic_impact": "<ekonomik etki analizi>",
+    "diagnosis_certainty": "<teşhis kesinliği ve ayırıcı tanı>",
+    "similar_diseases": "<karışabilecek hastalıklar ve farkları>",
+    "treatment_protocol": "<adım adım tedavi protokolü>",
+    "organic_alternatives": "<organik/biyolojik alternatifler>",
+    "resistance_management": "<direnç yönetimi stratejisi>"
   }
 }
 
-Zorunlu kurallar:
+Kurallar:
 - pathogen_type: fungal | bacterial | viral | pest | none
 - spread_risk: low | medium | high
 - spread_speed: slow | medium | fast | none
 - risk_level: 1=sağlıklı, 2=takip et, 3=dikkat, 4=yüksek risk, 5=acil müdahale
-- confidence_score: 0-100 tam sayı
+- confidence_score: 0-100 tam sayı (fotoğraftaki belirtilerin ne kadar net göründüğüne göre belirle)
 - hotspot_regions: görselde enfekte bölgelerin koordinatları (x=0 sol, x=100 sağ; y=0 üst, y=100 alt)
   intensity: 0.9-1.0 → kırmızı (kritik), 0.5-0.89 → turuncu (orta), 0.1-0.49 → sarı (hafif)
 - Bitki tamamen sağlıklıysa: risk_level=1, affected_percentage=0, hotspot_regions=[]
+- Her fotoğraf farklıdır — önceki örneklere değil, BU FOTOĞRAFA göre analiz yap
 - Tüm Türkçe metinler bilimsel/teknik ziraat mühendisliği dilinde olmalı\
 """
 
@@ -472,6 +476,7 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
             async_client.chat.completions.create(
                 model="gpt-4o-mini",
                 max_tokens=2500,
+                temperature=0.3,
                 messages=[{
                     "role": "user",
                     "content": [
@@ -621,6 +626,8 @@ async def _analyze_with_vision(image_bytes: bytes) -> FullAnalysisResponse:
         severity_distribution=str(data.get("severity_distribution", "")),
         expert_analysis=expert_analysis,
     )
+
+    print(f"[Vision] Analiz tamamlandı: {disease_name_tr}, risk: {risk_level}, hotspot sayısı: {len(hotspot_regions)}", flush=True)
 
     leaf_resp = LeafDetectionResponse(
         success=True,

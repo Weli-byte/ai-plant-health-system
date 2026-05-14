@@ -100,7 +100,7 @@ function drawHotspotsOnCanvas(
   canvas: HTMLCanvasElement,
   img: HTMLImageElement,
   hotspots: HotspotRegion[],
-  healthyPct: number,
+  isHealthy: boolean,
 ) {
   const w = img.clientWidth;
   const h = img.clientHeight;
@@ -113,13 +113,14 @@ function drawHotspotsOnCanvas(
 
   ctx.clearRect(0, 0, w, h);
 
-  if (hotspots.length === 0) return;
-
-  // Sağlıklı alan için hafif yeşil overlay
-  if (healthyPct > 30) {
-    ctx.fillStyle = 'rgba(0,200,83,0.10)';
+  // Sağlıklı bitki: tüm görüntüye hafif yeşil overlay
+  if (isHealthy && hotspots.length === 0) {
+    ctx.fillStyle = 'rgba(0,200,83,0.20)';
     ctx.fillRect(0, 0, w, h);
+    return;
   }
+
+  if (hotspots.length === 0) return;
 
   // Enfeksiyon odak noktaları
   for (const region of hotspots) {
@@ -129,8 +130,8 @@ function drawHotspotsOnCanvas(
 
     let rgb: string;
     let alpha: number;
-    if (region.intensity >= 0.9) { rgb = '255,45,0'; alpha = 0.55; }
-    else if (region.intensity >= 0.6) { rgb = '255,140,0'; alpha = 0.40; }
+    if (region.intensity > 0.8) { rgb = '255,45,0'; alpha = 0.60; }
+    else if (region.intensity >= 0.5) { rgb = '255,140,0'; alpha = 0.45; }
     else { rgb = '255,215,0'; alpha = 0.30; }
 
     const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
@@ -206,6 +207,13 @@ export default function Results() {
   const hotspots = enrichment?.hotspot_regions ?? [];
   const healthyPct = enrichment?.healthy_percentage ?? 100;
   const affectedPct = enrichment?.affected_percentage ?? 0;
+  const isHealthy = riskLevel === 1 && hotspots.length === 0;
+
+  const RISK_SCORE_RANGES: Record<number, [number, number]> = {
+    1: [10, 20], 2: [25, 40], 3: [45, 60], 4: [65, 80], 5: [85, 95],
+  };
+  const [rsMin, rsMax] = RISK_SCORE_RANGES[riskLevel] ?? [45, 60];
+  const riskScore = Math.round(rsMin + (affectedPct / 100) * (rsMax - rsMin));
 
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -216,10 +224,10 @@ export default function Results() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const redraw = useCallback(() => {
-    if (canvasRef.current && imgRef.current && hotspots.length > 0) {
-      drawHotspotsOnCanvas(canvasRef.current, imgRef.current, hotspots, healthyPct);
+    if (canvasRef.current && imgRef.current) {
+      drawHotspotsOnCanvas(canvasRef.current, imgRef.current, hotspots, isHealthy);
     }
-  }, [hotspots, healthyPct]);
+  }, [hotspots, isHealthy]);
 
   useEffect(() => { redraw(); }, [redraw]);
 
@@ -327,7 +335,7 @@ export default function Results() {
               className="w-full aspect-square object-cover opacity-90"
               onLoad={redraw}
             />
-            {hotspots.length > 0 && (
+            {(hotspots.length > 0 || isHealthy) && (
               <canvas
                 ref={canvasRef}
                 onClick={handleCanvasClick}
@@ -343,7 +351,7 @@ export default function Results() {
                 <p className="text-white/70">Yoğunluk: %{Math.round(tooltip.intensity * 100)}</p>
               </div>
             )}
-            {!gradcamInfo && hotspots.length === 0 && (
+            {!gradcamInfo && hotspots.length === 0 && !isHealthy && (
               <div className="absolute top-1/3 left-1/3 w-24 h-24 border-4 border-red-500 rounded-full animate-pulse shadow-[0_0_20px_rgba(239,68,68,0.5)]" />
             )}
           </div>
@@ -591,6 +599,12 @@ export default function Results() {
         <div className="flex items-center gap-2 font-bold text-foreground">
           <BarChart2 className="h-5 w-5 text-amber-500" />
           <span>Risk Değerlendirmesi</span>
+        </div>
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-xs text-muted-foreground">Risk Skoru</span>
+          <span className="text-2xl font-black" style={{ color: riskLevel <= 2 ? 'var(--renk-acik-yesil)' : riskLevel === 3 ? '#C17B30' : '#A03030' }}>
+            {riskScore}
+          </span>
         </div>
         <div className="space-y-1">
           <div className="flex justify-between text-xs text-muted-foreground">
