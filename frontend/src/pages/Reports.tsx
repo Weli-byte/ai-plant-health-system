@@ -14,7 +14,7 @@ import {
 import {
   reportsApi, riskPredictionApi, weatherApi,
   type ReportSummary, type RiskPredictionResult, type WeatherDay,
-  type DailyDataItem,
+  type DailyDataItem, type MonthlyDataItem,
 } from "@/services/api";
 import { getUser } from "@/lib/auth";
 
@@ -281,6 +281,100 @@ export default function Reports() {
     return () => { if (simTimer.current) clearInterval(simTimer.current); };
   }, [simRunning, interventionDay]);
 
+  // ─── PDF indirme ─────────────────────────────────────────────────────────────
+
+  const downloadPdf = async (m: MonthlyDataItem) => {
+    const { default: jsPDF } = await import("jspdf");
+    const doc = new jsPDF();
+    const dkGreen: [number, number, number] = [45, 74, 45];
+    const now = new Date();
+
+    // Kapak başlık bandı
+    doc.setFillColor(...dkGreen);
+    doc.rect(0, 0, 210, 48, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont("helvetica", "bold");
+    doc.text("AI Plant Health System", 105, 18, { align: "center" });
+    doc.setFontSize(13);
+    doc.text("Aylik Rapor — " + m.label, 105, 30, { align: "center" });
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text("Olusturulma: " + now.toLocaleDateString("tr-TR"), 105, 42, { align: "center" });
+
+    // Bolum 1 — Ozet
+    doc.setTextColor(...dkGreen);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Bolum 1: Ozet", 14, 62);
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const data = summary ?? { total: m.total, healthy: m.healthy, health_score: m.health_pct, active_diseases: 0 };
+    doc.text("Toplam Analiz     : " + m.total, 14, 74);
+    doc.text("Saglikli Analiz   : " + m.healthy, 14, 83);
+    doc.text("Saglik Skoru      : %" + m.health_pct, 14, 92);
+    doc.text("En Sik Hastalik   : " + m.top_disease, 14, 101);
+    doc.text("Aktif Hastalik    : " + (data.active_diseases ?? "—"), 14, 110);
+
+    // Bolum 2 — Hastaliklar
+    doc.setTextColor(...dkGreen);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Bolum 2: Tespit Edilen Hastaliklar", 14, 126);
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    const dist = summary?.disease_distribution ?? [];
+    if (dist.length === 0) {
+      doc.text("Veri bulunamadi — demo mod aktif.", 14, 138);
+    } else {
+      dist.slice(0, 7).forEach((d, i) => {
+        doc.text(`${i + 1}. ${d.name}  —  ${d.count} analiz  (Son: ${d.last_date})`, 14, 138 + i * 9);
+      });
+    }
+
+    const y3 = dist.length > 0 ? 138 + Math.min(dist.length, 7) * 9 + 14 : 152;
+
+    // Bolum 3 — Onerilen Tedaviler
+    doc.setTextColor(...dkGreen);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Bolum 3: Onerilen Tedaviler", 14, y3);
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("- Tespit edilen hastaliklar icin fungisit uygulamasini geciktirmeyin.", 14, y3 + 12);
+    doc.text("- Sulama saatini gunduz erken saatlerine alin.", 14, y3 + 21);
+    doc.text("- Etkilenen yapraklari uzaklastirin ve komsu bitkileri kontrol edin.", 14, y3 + 30);
+    doc.text("- Organik alternatifleri tercih ederek direnc yonetimini saglayin.", 14, y3 + 39);
+
+    // Bolum 4 — Sonraki Ay Onerileri
+    const y4 = y3 + 56;
+    doc.setTextColor(...dkGreen);
+    doc.setFontSize(13);
+    doc.setFont("helvetica", "bold");
+    doc.text("Bolum 4: Bir Sonraki Ay Icin Oneriler", 14, y4);
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(10);
+    doc.setFont("helvetica", "normal");
+    doc.text("- Haftada en az 2 yaprak analizi yapilmasi onerilir.", 14, y4 + 12);
+    doc.text("- Hava nem %70'i gectigi gunlerde ilaclama riskini artirin.", 14, y4 + 21);
+    doc.text("- Mevsim degisimlerinde erken koruyucu ilaclama plani hazirlayin.", 14, y4 + 30);
+    doc.text("- Urun rotasyonu ile toprak kaynakli hastaliklari azaltin.", 14, y4 + 39);
+
+    // Alt bilgi
+    doc.setFillColor(...dkGreen);
+    doc.rect(0, 272, 210, 25, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text("Bu rapor AI Plant Health System tarafindan otomatik olusturulmustur.", 105, 281, { align: "center" });
+    doc.text("Veriler yapay zeka analizine dayalidir; uzman tavsiyesi yerine gecilemez.", 105, 288, { align: "center" });
+
+    doc.save(`rapor-${m.year}-${String(m.month).padStart(2, "0")}.pdf`);
+    toast.success("PDF indirildi!");
+  };
+
   // ─── risk prediction ──────────────────────────────────────────────────────────
 
   const runRiskPrediction = async () => {
@@ -414,8 +508,8 @@ export default function Reports() {
                     ) : null
                   }
                 />
-                <Bar dataKey="healthy" stackId="a" fill="#4ade80" radius={[0, 0, 0, 0]} />
-                <Bar dataKey="diseased" stackId="a" fill="#f87171" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="healthy" stackId="a" fill="#5A8A3C" radius={[0, 0, 0, 0]} />
+                <Bar dataKey="diseased" stackId="a" fill="#A03030" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
             <div className="flex items-center gap-4 mt-2">
@@ -515,7 +609,8 @@ export default function Reports() {
         <button
           onClick={runRiskPrediction}
           disabled={riskLoading}
-          className="w-full rounded-2xl bg-leaf-gradient py-3.5 text-sm font-bold text-primary-foreground shadow-soft disabled:opacity-60 active:scale-[0.98] transition flex items-center justify-center gap-2"
+          className="w-full rounded-xl py-3.5 text-sm font-bold text-white shadow-soft disabled:opacity-60 active:scale-[0.98] transition flex items-center justify-center gap-2"
+          style={{ background: "var(--renk-koyu-yesil)" }}
         >
           {riskLoading ? <><Loader2 className="h-4 w-4 animate-spin" /> Hesaplanıyor...</> : "TAHMİN ÇALIŞTIR"}
         </button>
@@ -887,11 +982,9 @@ export default function Reports() {
                 </span>
               </div>
               <button
-                onClick={() => {
-                  console.log("[PDF] Rapor indirme:", m.label);
-                  toast.info("PDF indirme özelliği yakında aktif olacak.");
-                }}
-                className="mt-3 w-full rounded-2xl border border-border/60 py-2.5 text-xs font-semibold text-muted-foreground hover:bg-muted/40 flex items-center justify-center gap-2 transition"
+                onClick={() => downloadPdf(m)}
+                className="mt-3 w-full rounded-xl py-2.5 text-xs font-semibold text-white flex items-center justify-center gap-2 transition hover:opacity-90 active:scale-[0.98]"
+                style={{ background: "var(--renk-acik-yesil)" }}
               >
                 <Download className="h-3.5 w-3.5" /> PDF İndir
               </button>
@@ -931,8 +1024,13 @@ function MetricCard({
   return (
     <button
       onClick={onClick}
-      className={`shrink-0 w-36 rounded-2xl border shadow-card p-3.5 text-left space-y-2 active:scale-[0.97] transition ${accentBg}`}
+      className={`shrink-0 w-36 rounded-2xl border shadow-card text-left space-y-2 active:scale-[0.97] transition overflow-hidden ${accentBg}`}
+      style={{ padding: 0 }}
     >
+      {/* Sol accent bar */}
+      <div className="flex h-full">
+        <div className="w-1 shrink-0" style={{ background: "var(--renk-acik-yesil)", borderRadius: "12px 0 0 12px" }} />
+        <div className="flex-1 p-3.5 space-y-2">
       <div className="flex items-center justify-between">
         {icon}
         {isDemo && <span className="text-[9px] font-bold text-primary bg-primary/10 rounded-full px-1.5 py-0.5">Demo</span>}
@@ -957,6 +1055,8 @@ function MetricCard({
         <p className="text-[9px] text-muted-foreground mt-0.5">{sub}</p>
       </div>
       <ChevronRight className="h-3 w-3 text-muted-foreground" />
+        </div>
+      </div>
     </button>
   );
 }

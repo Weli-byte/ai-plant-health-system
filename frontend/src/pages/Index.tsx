@@ -98,13 +98,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-5 animate-fade-in">
       {/* Greeting + Weather */}
-      <Card className="overflow-hidden rounded-3xl border-border/60 shadow-card">
-        <CardContent className="bg-leaf-gradient p-5 text-primary-foreground">
+      <Card className="overflow-hidden rounded-3xl shadow-card" style={{ border: "none" }}>
+        <CardContent className="p-5 text-white" style={{ background: "var(--renk-koyu-yesil)" }}>
           <p className="text-xs uppercase tracking-[0.18em] opacity-80">Bugün</p>
           <h2 className="mt-1 text-xl font-semibold">Merhaba, {userName} 👋</h2>
           <p className="mt-1 text-sm opacity-90">
             {userCity ? (
-              <span className="flex items-center gap-1">
+              <span className="flex items-center gap-1" style={{ color: "var(--renk-neon-yesil)" }}>
                 <MapPin className="h-3 w-3" />
                 {userCity}{user?.district ? `, ${user.district}` : ""}
               </span>
@@ -358,20 +358,20 @@ export default function Dashboard() {
 
       {/* Chat CTA */}
       <Link to="/chat">
-        <Card className="rounded-3xl border-primary/30 bg-card shadow-card transition hover:bg-accent/40">
+        <Card className="rounded-3xl shadow-card transition hover:opacity-90" style={{ background: "var(--renk-koyu-yesil)", border: "none" }}>
           <CardContent className="flex items-center gap-3 p-4">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-leaf-gradient text-primary-foreground">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl text-white" style={{ background: "var(--renk-acik-yesil)" }}>
               <Sparkles className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-foreground">
+              <p className="text-sm font-semibold text-white">
                 AI'a sor: "Bu hastalık neden oldu?"
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs" style={{ color: "var(--renk-soluk-yesil)" }}>
                 Çiftçi diliyle, sade ve hızlı cevaplar.
               </p>
             </div>
-            <ArrowRight className="h-5 w-5 text-primary" />
+            <ArrowRight className="h-5 w-5 text-white/70" />
           </CardContent>
         </Card>
       </Link>
@@ -385,10 +385,10 @@ export default function Dashboard() {
 
 function WeatherSkeleton() {
   return (
-    <div className="rounded-2xl bg-primary-foreground/15 p-3">
-      <Skeleton className="mb-1 h-4 w-4 bg-primary-foreground/20" />
-      <Skeleton className="h-4 w-10 bg-primary-foreground/20" />
-      <Skeleton className="mt-1 h-2.5 w-8 bg-primary-foreground/20" />
+    <div className="rounded-xl p-3 animate-pulse" style={{ background: "var(--renk-orta-yesil)" }}>
+      <Skeleton className="mb-1 h-4 w-4 bg-white/20" />
+      <Skeleton className="h-4 w-10 bg-white/20" />
+      <Skeleton className="mt-1 h-2.5 w-8 bg-white/20" />
     </div>
   );
 }
@@ -401,10 +401,10 @@ function Stat({
   sub: string;
 }) {
   return (
-    <div className="rounded-2xl bg-primary-foreground/15 p-3 backdrop-blur">
-      <Icon className="mb-1 h-4 w-4 opacity-90" />
-      <p className="text-sm font-semibold leading-none">{label}</p>
-      <p className="mt-1 text-[10px] opacity-80">{sub}</p>
+    <div className="rounded-xl p-3" style={{ background: "var(--renk-orta-yesil)" }}>
+      <Icon className="mb-1 h-4 w-4 text-white/80" />
+      <p className="text-sm font-semibold leading-none text-white">{label}</p>
+      <p className="mt-1 text-[10px] text-white/70">{sub}</p>
     </div>
   );
 }

@@ -2,7 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
-/* AI Plant Health System — Doğadan ilham, mobil-first, krem & toprak & yaprak yeşili */
+/* AI Plant Health System — Doğa & Toprak Teması */
+
+/* ── Doğa & Toprak renk paleti ─────────────────────────────────────── */
+:root {
+  --renk-koyu-yesil:  #2D4A2D;
+  --renk-orta-yesil:  #3A5F3A;
+  --renk-acik-yesil:  #5A8A3C;
+  --renk-neon-yesil:  #8FBF6F;
+  --renk-soluk-yesil: #A8C890;
+  --renk-bej:         #F5F0E8;
+  --renk-bej-koyu:    #EDE8DC;
+  --renk-bej-border:  #E0D8C8;
+  --renk-kart:        #FFFFFF;
+  --renk-metin-koyu:  #1C2A1C;
+  --renk-metin-orta:  #4A5A3A;
+  --renk-metin-soluk: #7A8A6A;
+  --renk-uyari:       #C17B30;
+  --renk-tehlike:     #A03030;
+  --renk-basari:      #5A8A3C;
+}
 
 @layer base {
   :root {

@@ -57,27 +57,23 @@ export default function Profile() {
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Kullanıcı kartı */}
-      <Card className="rounded-3xl border-border/60 shadow-card">
-        <CardContent className="p-5 text-center">
-          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full bg-leaf-gradient text-primary-foreground shadow-soft">
+      <div className="rounded-2xl p-5 text-center shadow-card" style={{ background: "var(--renk-bej-koyu)", border: "1px solid var(--renk-bej-border)" }}>
+          <div className="mx-auto mb-3 flex h-20 w-20 items-center justify-center rounded-full text-white shadow-soft" style={{ background: "var(--renk-acik-yesil)" }}>
             <User className="h-9 w-9" />
           </div>
           <p className="text-lg font-semibold text-foreground capitalize">
             {user?.name ?? "Çiftçi"}
           </p>
           <p className="text-xs text-muted-foreground">{user?.email ?? "—"}</p>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* İstatistikler */}
       <div className="grid grid-cols-3 gap-2">
         {loading ? (
-          <Card className="rounded-2xl border-border/60 col-span-3">
-            <CardContent className="p-3 flex items-center justify-center">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" />
-              <span className="ml-2 text-xs text-muted-foreground">Yükleniyor...</span>
-            </CardContent>
-          </Card>
+          <div className="rounded-xl col-span-3 p-3 flex items-center justify-center" style={{ background: "var(--renk-bej-koyu)" }}>
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span className="ml-2 text-xs text-muted-foreground">Yükleniyor...</span>
+          </div>
         ) : (
           <>
             <StatCard label="Bitki" value={String(plantCount)} />
@@ -127,12 +123,10 @@ export default function Profile() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <Card className="rounded-2xl border-border/60">
-      <CardContent className="p-3 text-center">
-        <p className="text-base font-semibold text-foreground">{value}</p>
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{label}</p>
-      </CardContent>
-    </Card>
+    <div className="rounded-xl p-3 text-center" style={{ background: "var(--renk-bej-koyu)", border: "1px solid var(--renk-bej-border)" }}>
+      <p className="text-base font-semibold" style={{ color: "var(--renk-koyu-yesil)" }}>{value}</p>
+      <p className="text-[10px] uppercase tracking-wider" style={{ color: "var(--renk-metin-soluk)" }}>{label}</p>
+    </div>
   );
 }
 
@@ -144,16 +138,20 @@ function Row({
   sub: string;
 }) {
   return (
-    <Card className="rounded-2xl border-border/60">
-      <CardContent className="flex items-center gap-3 p-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground">
-          <Icon className="h-4 w-4" />
-        </div>
-        <div className="flex-1">
-          <p className="text-sm font-medium text-foreground">{title}</p>
-          <p className="text-[11px] text-muted-foreground">{sub}</p>
-        </div>
-      </CardContent>
-    </Card>
+    <div
+      className="flex items-center gap-3 rounded-xl p-3 bg-white"
+      style={{ border: "1px solid var(--renk-bej-border)" }}
+    >
+      <div
+        className="flex h-10 w-10 items-center justify-center rounded-xl"
+        style={{ background: "var(--renk-bej-koyu)", color: "var(--renk-metin-orta)" }}
+      >
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="flex-1">
+        <p className="text-sm font-medium" style={{ color: "var(--renk-metin-koyu)" }}>{title}</p>
+        <p className="text-[11px]" style={{ color: "var(--renk-metin-soluk)" }}>{sub}</p>
+      </div>
+    </div>
   );
 }

@@ -82,13 +82,13 @@ export default function Chat() {
       style={{ background: "var(--gradient-earth)" }}
     >
       {/* Header */}
-      <div className="flex items-center gap-3 px-5 pb-3 pt-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-leaf-gradient text-primary-foreground shadow-soft">
+      <div className="flex items-center gap-3 px-5 pb-3 pt-2" style={{ background: "var(--renk-koyu-yesil)" }}>
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl text-white shadow-soft" style={{ background: "var(--renk-acik-yesil)" }}>
           <Sparkles className="h-5 w-5" />
         </div>
         <div>
-          <p className="text-base font-semibold text-foreground">Tarla Asistanı</p>
-          <p className="text-xs text-muted-foreground">Ziraat mühendisi · Fotoğraf analizi</p>
+          <p className="text-base font-semibold text-white">Tarla Asistanı</p>
+          <p className="text-xs" style={{ color: "var(--renk-soluk-yesil)" }}>Ziraat mühendisi · Fotoğraf analizi</p>
         </div>
       </div>
 
@@ -148,7 +148,8 @@ export default function Chat() {
           <button
             type="submit"
             disabled={!input.trim()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl bg-leaf-gradient text-primary-foreground shadow-soft transition disabled:opacity-50"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white shadow-soft transition disabled:opacity-50"
+            style={{ background: "var(--renk-acik-yesil)" }}
           >
             <Send className="h-4 w-4" />
           </button>
@@ -169,10 +170,12 @@ function Bubble({ msg }: { msg: Msg }) {
       <div
         className={cn(
           "max-w-[82%] rounded-3xl px-4 py-2.5 text-sm leading-relaxed shadow-card animate-slide-up",
-          isUser
-            ? "rounded-br-lg bg-primary text-primary-foreground"
-            : "rounded-bl-lg bg-card text-foreground"
+          isUser ? "rounded-br-lg text-white" : "rounded-bl-lg bg-white text-foreground"
         )}
+        style={isUser
+          ? { background: "var(--renk-acik-yesil)" }
+          : { border: "1px solid var(--renk-bej-border)" }
+        }
       >
         <span dangerouslySetInnerHTML={{ __html: format(msg.content) }} />
       </div>

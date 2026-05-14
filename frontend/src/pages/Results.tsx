@@ -12,12 +12,12 @@ import { getUser } from '@/lib/auth';
 // Sabitler
 // ---------------------------------------------------------------------------
 
-const RISK_BADGE: Record<number, { label: string; color: string }> = {
-  1: { label: 'Sağlıklı', color: 'bg-green-100 text-green-700' },
-  2: { label: 'Takip Et', color: 'bg-blue-100 text-blue-700' },
-  3: { label: 'Dikkat', color: 'bg-amber-100 text-amber-800' },
-  4: { label: 'Yüksek Risk', color: 'bg-orange-100 text-orange-800' },
-  5: { label: 'Acil Müdahale', color: 'bg-red-100 text-red-700' },
+const RISK_BADGE: Record<number, { label: string; bg: string; text: string }> = {
+  1: { label: 'Sağlıklı',      bg: '#E8F5E0', text: '#2D4A2D' },
+  2: { label: 'Takip Et',     bg: '#E8F5E0', text: '#2D4A2D' },
+  3: { label: 'Dikkat',       bg: '#FFF3E0', text: '#C17B30' },
+  4: { label: 'Yüksek Risk',  bg: '#FFF3E0', text: '#C17B30' },
+  5: { label: 'Acil Müdahale', bg: '#FFEBEE', text: '#A03030' },
 };
 
 const SPREAD_SPEED_LABELS: Record<string, string> = {
@@ -72,8 +72,8 @@ function ConfidenceBar({ pct }: { pct: number }) {
   return (
     <div className="relative h-2.5 w-full overflow-hidden rounded-full bg-muted">
       <div
-        className="absolute inset-y-0 left-0 rounded-full bg-leaf-gradient"
-        style={{ width: `${pct}%` }}
+        className="absolute inset-y-0 left-0 rounded-full"
+        style={{ width: `${pct}%`, background: "var(--renk-acik-yesil)" }}
       />
     </div>
   );
@@ -295,7 +295,10 @@ export default function Results() {
               <p className="text-sm text-muted-foreground mt-0.5 italic">{diseaseNameEn}</p>
             )}
           </div>
-          <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold ${badge.color}`}>
+          <span
+            className="shrink-0 rounded-full px-3 py-1 text-xs font-bold"
+            style={{ background: badge.bg, color: badge.text }}
+          >
             {badge.label}
           </span>
         </div>

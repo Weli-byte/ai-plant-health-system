@@ -1,4 +1,5 @@
 import { FormEvent, useState } from "react";
+import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Leaf } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -52,7 +53,8 @@ function GoogleButton({ label, onClick }: { label: string; onClick: () => void }
     <button
       type="button"
       onClick={onClick}
-      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border border-border/70 bg-white text-sm font-medium text-gray-700 shadow-card transition hover:bg-gray-50 active:scale-[.98]"
+      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl border bg-white text-sm font-medium text-gray-700 shadow-card transition hover:bg-gray-50 active:scale-[.98]"
+      style={{ borderColor: "var(--renk-bej-border)" }}
     >
       {/* Official Google "G" logo */}
       <svg viewBox="0 0 24 24" className="h-5 w-5" xmlns="http://www.w3.org/2000/svg">
@@ -66,12 +68,26 @@ function GoogleButton({ label, onClick }: { label: string; onClick: () => void }
   );
 }
 
+function AppleButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl text-sm font-medium text-white shadow-card transition hover:opacity-90 active:scale-[.98]"
+      style={{ background: "#000000" }}
+    >
+      <span className="text-base leading-none">🍎</span>
+      {label}
+    </button>
+  );
+}
+
 function OrDivider() {
   return (
     <div className="flex items-center gap-3">
-      <div className="h-px flex-1 bg-border/60" />
+      <div className="h-px flex-1" style={{ background: "var(--renk-bej-border)" }} />
       <span className="text-[11px] font-medium text-muted-foreground">veya</span>
-      <div className="h-px flex-1 bg-border/60" />
+      <div className="h-px flex-1" style={{ background: "var(--renk-bej-border)" }} />
     </div>
   );
 }
@@ -172,6 +188,14 @@ function LoginForm({ onSuccess }: { onSuccess: () => void }) {
         }}
       />
       <OrDivider />
+      <AppleButton
+        label="Apple ile Giriş Yap"
+        onClick={() => {
+          console.log("Apple login tıklandı");
+          toast.info("Apple girişi yakında aktif olacak");
+        }}
+      />
+      <OrDivider />
 
       <form onSubmit={handleSubmit} noValidate className="space-y-3">
         <div>
@@ -267,6 +291,14 @@ function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
           const user = loginMock("google@demo.com", "Google Kullanıcısı");
           await syncBackendUser("google@demo.com", user.name);
           onSuccess();
+        }}
+      />
+      <OrDivider />
+      <AppleButton
+        label="Apple ile Kayıt Ol"
+        onClick={() => {
+          console.log("Apple login tıklandı");
+          toast.info("Apple girişi yakında aktif olacak");
         }}
       />
       <OrDivider />
@@ -399,9 +431,10 @@ export default function Login() {
               className={cn(
                 "flex-1 rounded-xl py-2.5 text-sm font-semibold transition-all duration-200",
                 tab === t
-                  ? "bg-leaf-gradient text-primary-foreground shadow-soft"
+                  ? "text-white shadow-soft"
                   : "text-muted-foreground hover:text-foreground"
               )}
+              style={tab === t ? { background: "var(--renk-acik-yesil)" } : {}}
             >
               {t === "login" ? "Giriş Yap" : "Kayıt Ol"}
             </button>

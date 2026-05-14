@@ -492,7 +492,7 @@ function PlantCard({ plant, onAnalyze }: { plant: Plant; onAnalyze: () => void }
     <div className="rounded-3xl border border-border/60 bg-card shadow-card p-4 space-y-3">
       {/* Üst satır */}
       <div className="flex items-start gap-3">
-        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-leaf-gradient text-2xl">
+        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-2xl" style={{ background: "var(--renk-bej-koyu)" }}>
           {plant.plant_emoji ?? "🌱"}
         </div>
         <div className="flex-1 min-w-0">
@@ -505,7 +505,7 @@ function PlantCard({ plant, onAnalyze }: { plant: Plant; onAnalyze: () => void }
             </p>
           )}
         </div>
-        <span className="shrink-0 rounded-full bg-green-100 text-green-700 px-2.5 py-0.5 text-[10px] font-bold">
+        <span className="shrink-0 rounded-full px-2.5 py-0.5 text-[10px] font-bold" style={{ background: "#E8F5E0", color: "#2D4A2D" }}>
           Aktif
         </span>
       </div>
@@ -517,8 +517,8 @@ function PlantCard({ plant, onAnalyze }: { plant: Plant; onAnalyze: () => void }
             <span>Büyüme Evresi</span>
             <span className="font-medium text-foreground">{stageEmoji} {stageName}</span>
           </div>
-          <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full bg-leaf-gradient" style={{ width: `${stagePct}%` }} />
+          <div className="h-2 w-full rounded-full overflow-hidden" style={{ background: "var(--renk-bej-koyu)" }}>
+            <div className="h-full rounded-full" style={{ width: `${stagePct}%`, background: "var(--renk-acik-yesil)" }} />
           </div>
         </div>
       )}
@@ -548,7 +548,8 @@ function PlantCard({ plant, onAnalyze }: { plant: Plant; onAnalyze: () => void }
       {/* Analiz başlat butonu */}
       <button
         onClick={onAnalyze}
-        className="w-full flex items-center justify-center gap-2 rounded-2xl border border-primary/40 bg-primary/5 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/10 active:scale-[0.98]"
+        className="w-full flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold transition hover:opacity-90 active:scale-[0.98]"
+        style={{ background: "white", border: "1.5px solid var(--renk-acik-yesil)", color: "var(--renk-acik-yesil)" }}
       >
         <Camera className="h-4 w-4" />
         Analiz Başlat
