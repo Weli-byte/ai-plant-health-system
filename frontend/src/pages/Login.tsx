@@ -73,10 +73,12 @@ function AppleButton({ label, onClick }: { label: string; onClick: () => void })
     <button
       type="button"
       onClick={onClick}
-      className="flex h-12 w-full items-center justify-center gap-3 rounded-2xl text-sm font-medium text-white shadow-card transition hover:opacity-90 active:scale-[.98]"
+      className="flex h-12 w-full items-center justify-center gap-2.5 rounded-xl text-sm font-medium text-white shadow-card transition hover:opacity-90 active:scale-[.98]"
       style={{ background: "#000000" }}
     >
-      <span className="text-base leading-none">🍎</span>
+      <svg width="17" height="20" viewBox="0 0 814 1000" fill="white" xmlns="http://www.w3.org/2000/svg">
+        <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105-42.3-168.6-109.5c-64.4-68.6-122.7-180.3-122.7-287.6 0-150.4 98-228.9 194.4-228.9 65.5 0 120.3 43.3 161.9 43.3 39.7 0 101.9-46.2 176.9-46.2zm-234.7-105.6c31.5-37.5 54.3-89.7 54.3-141.9 0-7.1-.6-14.3-1.9-20.1-51.6 1.9-112.3 34.4-149.2 77.3-28.5 32.7-56 84.9-56 137.8 0 7.7 1.3 15.5 1.9 18 3.2.6 8.4 1.3 13.6 1.3 46.2 0 101.9-31 137.3-72.4z" />
+      </svg>
       {label}
     </button>
   );
